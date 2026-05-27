@@ -11,7 +11,21 @@ uses
   {$ELSE}
   blaise.testing, blaise.testing.runner.text,
   {$ENDIF}
-  bindgen.ir, bindgen.parser, bindgen.emit.fpc, bindgen.emit.blaise, clang.wrap;
+  bindgen.ir, bindgen.parser, bindgen.emit.fpc, bindgen.emit.blaise,
+  bindgen.blob, clang.wrap;
+
+procedure WriteSnippet(Path, Content: string);
+var
+  B: TMemoryBlob;
+begin
+  B := TMemoryBlob.Create;
+  try
+    B.AppendString(Content);
+    B.SaveToFile(Path);
+  finally
+    B.Free;
+  end;
+end;
 
 type
   TIRTests = class(TTestCase)
@@ -450,8 +464,7 @@ var
   E: TFpcEmitter;
 begin
   TmpH := GetTempFileName + '.h';
-  with TFileStream.Create(TmpH, fmCreate) do
-    try Write(Snippet[1], Length(Snippet)); finally Free; end;
+  WriteSnippet(TmpH, Snippet);
   try
     U := ParseHeader(TmpH, []);
     try
@@ -487,8 +500,7 @@ begin
   TmpDir := GetTempDir(True);
   PasFile := IncludeTrailingPathDelimiter(TmpDir) + 'sample.pas';
   OutFile := IncludeTrailingPathDelimiter(TmpDir) + 'sample.out';
-  with TFileStream.Create(PasFile, fmCreate) do
-    try Write(S[1], Length(S)); finally Free; end;
+  WriteSnippet(PasFile, S);
   try
     { -Cn  produces .o only (no link). Plenty for syntactic verification. }
     Cmd := Format('fpc -Cn -O- %s > %s 2>&1', [PasFile, OutFile]);
@@ -626,8 +638,7 @@ begin
   TmpDir := GetTempDir(True);
   PasFile := IncludeTrailingPathDelimiter(TmpDir) + 'sample.pas';
   OutFile := IncludeTrailingPathDelimiter(TmpDir) + 'sample.out';
-  with TFileStream.Create(PasFile, fmCreate) do
-    try Write(S[1], Length(S)); finally Free; end;
+  WriteSnippet(PasFile, S);
   try
     { --emit-ir: parse + lower without writing a binary. Sufficient
       proof that the emitted unit is syntactically and semantically
@@ -699,8 +710,7 @@ var
   T, R: TClangType;
 begin
   TmpH := GetTempFileName + '.h';
-  with TFileStream.Create(TmpH, fmCreate) do
-    try Write(Snippet[1], Length(Snippet)); finally Free; end;
+  WriteSnippet(TmpH, Snippet);
   Idx := TClangIndex.Create(False, False);
   try
     C := FindCursor(Idx, TmpH, 'add', TClangKinds.FunctionDecl);
@@ -735,8 +745,7 @@ var
   T: TClangType;
 begin
   TmpH := GetTempFileName + '.h';
-  with TFileStream.Create(TmpH, fmCreate) do
-    try Write(Snippet[1], Length(Snippet)); finally Free; end;
+  WriteSnippet(TmpH, Snippet);
   Idx := TClangIndex.Create(False, False);
   try
     C := FindCursor(Idx, TmpH, 'f', TClangKinds.FunctionDecl);
@@ -766,8 +775,7 @@ var
   T: TClangType;
 begin
   TmpH := GetTempFileName + '.h';
-  with TFileStream.Create(TmpH, fmCreate) do
-    try Write(Snippet[1], Length(Snippet)); finally Free; end;
+  WriteSnippet(TmpH, Snippet);
   Idx := TClangIndex.Create(False, False);
   try
     C := FindCursor(Idx, TmpH, 'printf', TClangKinds.FunctionDecl);
@@ -797,8 +805,7 @@ var
   T, A: TClangType;
 begin
   TmpH := GetTempFileName + '.h';
-  with TFileStream.Create(TmpH, fmCreate) do
-    try Write(Snippet[1], Length(Snippet)); finally Free; end;
+  WriteSnippet(TmpH, Snippet);
   Idx := TClangIndex.Create(False, False);
   try
     C := FindCursor(Idx, TmpH, 'g', TClangKinds.FunctionDecl);
