@@ -62,6 +62,7 @@ type
     function  AliasPointer(const Raw: string): string;
     function  LocComment(const Loc: TSourceLoc): string;
     function  EscapeIdent(const S: string): string;
+    function  DisambiguateIdent(const CName: string): string;
     procedure CollectFunctionPointerAliases(U: TBindingUnit);
     procedure WalkTypeForAliases(T: TBindingType);
   public
@@ -479,6 +480,21 @@ begin
   Line('}');
 end;
 
+{ Resolve a C identifier to a Pascal identifier that doesn't clash
+  with anything we've already emitted. Windows headers ship many
+  name pairs that look distinct in C but collide under Pascal's
+  case-insensitive rule — 'STRETCHBLT' const + 'StretchBlt' API,
+  'GetProcessId' API + a same-named typedef, etc. The Pascal-side
+  name picks up a '_' suffix; the linker symbol (via 'external
+  name ...') stays untouched. }
+function TFpcEmitter.DisambiguateIdent(const CName: string): string;
+begin
+  Result := EscapeIdent(CName);
+  while (FDeclaredTypeNames.IndexOf(LowerCase(Result)) >= 0)
+     or (FEmittedTypes.IndexOf('fn:' + LowerCase(Result)) >= 0) do
+    Result := Result + '_';
+end;
+
 procedure TFpcEmitter.EmitFunction(F: TBindingFunction);
 var
   I: Integer;
@@ -488,8 +504,10 @@ var
   Sig: string;
   Modifiers: string;
   ParamName: string;
+  PascalName: string;
 begin
   if F.RawComment <> '' then Line(PascalizeComment(F.RawComment));
+  PascalName := DisambiguateIdent(F.Name);
   Params := '';
   for I := 0 to F.Params.Count - 1 do
   begin
@@ -515,9 +533,12 @@ begin
     Modifiers := Modifiers + Format('; external name ''%s''', [F.Name]);
 
   if RetType = '' then
-    Sig := Format('procedure %s%s; %s;', [EscapeIdent(F.Name), Params, Modifiers])
+    Sig := Format('procedure %s%s; %s;', [PascalName, Params, Modifiers])
   else
-    Sig := Format('function %s%s: %s; %s;', [EscapeIdent(F.Name), Params, RetType, Modifiers]);
+    Sig := Format('function %s%s: %s; %s;', [PascalName, Params, RetType, Modifiers]);
+  { Reserve the Pascal-side identifier so later decls dedup
+    against it case-insensitively. }
+  FEmittedTypes.Add('fn:' + LowerCase(PascalName));
 
   Line(Sig + LocComment(F.Location));
 end;
@@ -601,15 +622,12 @@ begin
   if D is TBindingFunction then
   begin
     { C has no overloads. Multiple FunctionDecl cursors with the
-      same name are either redeclarations or visibility-hidden
-      copies; emit only the first. }
-    if FEmittedTypes.IndexOf('fn:' + LowerCase(D.Name)) >= 0 then Exit;
-    { Case-insensitive collision with an already-emitted type
-      (windows.h declares both 'typedef ... STRETCHBLT;' and
-      'BOOL WINAPI StretchBlt(...);' — Pascal sees them as the
-      same identifier). Type wins; skip the function. }
-    if FDeclaredTypeNames.IndexOf(LowerCase(D.Name)) >= 0 then Exit;
-    FEmittedTypes.Add('fn:' + LowerCase(D.Name));
+      same exact C name are redeclarations; emit only the first.
+      Pascal-side collisions (case-folded vs another decl) are
+      handled inside EmitFunction by appending '_' to the Pascal
+      identifier; the linker symbol stays as F.Name. }
+    if FEmittedTypes.IndexOf('cfn:' + D.Name) >= 0 then Exit;
+    FEmittedTypes.Add('cfn:' + D.Name);
     EmitFunction(TBindingFunction(D));
     Exit;
   end;

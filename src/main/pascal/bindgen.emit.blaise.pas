@@ -61,6 +61,7 @@ type
     function  AliasPointer(const Raw: string): string;
     function  LocComment(const Loc: TSourceLoc): string;
     function  EscapeIdent(const S: string): string;
+    function  DisambiguateIdent(const CName: string): string;
     function  PascalizeComment(const Raw: string): string;
     procedure CollectFunctionPointerAliases(U: TBindingUnit);
     procedure WalkTypeForAliases(T: TBindingType);
@@ -121,19 +122,66 @@ begin
   inherited Destroy;
 end;
 
-{ Blaise RTL functions that surface in the global namespace and
-  clash with same-named C externs (windows.h's ReadFile vs
-  TRtlPlatform.ReadFile, ...). Used by EmitDecl to drop the
-  externs silently. Case-folded. }
+{ Blaise RTL global identifiers. Surfacing at unit-interface scope
+  means same-named C externs collide; DisambiguateIdent renames the
+  Pascal side ('GetProcessId' -> 'GetProcessId_'), the linker symbol
+  ('external name ...') stays unchanged.
+
+  TODO(blaise upstream): when Blaise moves its RTL helpers behind a
+  unit prefix (e.g. `System.WriteLn` instead of bare `WriteLn`),
+  this list can be deleted entirely and DisambiguateIdent will be
+  driven purely by what the binding itself declares.
+
+  Also: when binding Windows headers the deploy target is the Win64
+  RTL which has a different (likely smaller) collision set. At that
+  point the list should be tightened or made target-aware.
+
+  Built by extracting all uppercase-leading 'T'-typed symbols from
+  the Blaise bootstrap RTL archive (`nm
+  blaise_rtl_unit_source.a | grep ' T '`), case-folded, then unioned
+  with names visible only via prebuilt .o files we discovered via
+  `strings`. Case-folded comparison.
+
+  Excluded on purpose:
+  * names starting with `_` (Blaise convention for compiler builtins,
+    no C library uses them)
+  * `k32_*`, `libc_*`, `msvcrt_*`, `pthread_*` (Blaise's prefixed
+    syscall wrappers — they don't collide with C names)
+  * Blaise class types (TList, TStream...) which the FFI won't
+    declare functions for }
+const
+  BLAISE_RTL_GLOBALS =
+    '|absint|abstractmethoderror|appendfile|changefileext|checknil|chr' +
+    '|currentexception|currentexceptioncxx|currentexceptionmessage' +
+    '|deletefile|directoryexists|doubletostr|excludetrailingpathdelimiter' +
+    '|exec|extractfiledir|extractfileext|extractfilename|extractfilepath' +
+    '|fdclose|fdopenappend|fdopenread|fdopenwrite|fdread|fdseek|fdsize' +
+    '|fdwrite|fileexists|forcedirectories|getcurrentdir|getenvvar|getitab' +
+    '|getprocessid|gettempdir|gettempfilename|halt|hasclassattribute' +
+    '|implementsinterface|includetrailingpathdelimiter|inheritsfrom' +
+    '|inttostr|isinstance|methodaddress|ordat|paramcount|paramstr' +
+    '|popexcframe|processaddarg|processcreate|processexecute' +
+    '|processexitcode|processfree|processreadoutput|processrunning' +
+    '|processsetexe|processsetnoconsole|processwaitonexit|pushexcframe' +
+    '|raise|readfile|removedir|renamefile|reraise|rtlgetpathdelim' +
+    '|rtlgetpathlistsep|setargs|setcurrentdir|singletostr|sleep' +
+    '|stringaddref|stringcompare|stringcomparetext|stringconcat' +
+    '|stringcopy|stringdelete|stringequals|stringformatn|stringfrompchar' +
+    '|stringlength|stringlowercase|stringpos|stringposex|stringrelease' +
+    '|stringreleasecheck|stringsametext|stringsetlength|stringtrim' +
+    '|stringuppercase|strtodouble|strtoint|syswriteint|syswritenewline' +
+    '|syswritestr|timedaysinmonth|timeisleapyear|timejoin' +
+    '|timelocaloffsetsecs|timenow|timesplit|upcase|weakassign|weakclear' +
+    '|weakzeroslots|writefile|' +
+    { Compiler intrinsics — built into the codegen, not exposed in
+      the RTL .a but still clash as global identifiers. }
+    '|abs|assigned|chr|dec|dispose|exclude|exit|finalize|high|inc' +
+    '|include|initialize|length|low|new|odd|ord|pred|round|setlength' +
+    '|sizeof|sqr|sqrt|succ|trunc|typeinfo|';
+
 function IsBlaiseRtlGlobal(const S: string): Boolean;
-var
-  L: string;
 begin
-  L := LowerCase(S);
-  Result := (L = 'readfile') or (L = 'writefile')
-         or (L = 'halt') or (L = 'exit') or (L = 'write')
-         or (L = 'writeln') or (L = 'strlen')
-         or (L = 'paramcount') or (L = 'paramstr');
+  Result := Pos('|' + LowerCase(S) + '|', BLAISE_RTL_GLOBALS) > 0;
 end;
 
 { Blaise built-in or RTL-provided identifiers. Used to suppress
@@ -153,6 +201,20 @@ begin
          or (L = 'uint16') or (L = 'uint32') or (L = 'uint64')
          or (L = 'single') or (L = 'double')
          or (L = 'boolean') or (L = 'string');
+end;
+
+{ Same case-insensitive disambiguation as the FPC emitter: when
+  a function's Pascal-side name would collide with anything already
+  emitted (or with the Blaise RTL's global namespace), append '_'
+  to the Pascal name. The C linker symbol stays untouched via
+  `external name '<original>'`. }
+function TBlaiseEmitter.DisambiguateIdent(const CName: string): string;
+begin
+  Result := EscapeIdent(CName);
+  while (FDeclaredTypeNames.IndexOf(LowerCase(Result)) >= 0)
+     or (FEmittedTypes.IndexOf('fn:' + LowerCase(Result)) >= 0)
+     or IsBlaiseRtlGlobal(Result) do
+    Result := Result + '_';
 end;
 
 function TBlaiseEmitter.EscapeIdent(const S: string): string;
@@ -488,9 +550,10 @@ var
   I: Integer;
   Params: string;
   P: TBindingParam;
-  RetType, Sig, ParamName, Modifiers: string;
+  RetType, Sig, ParamName, Modifiers, PascalName: string;
 begin
   if F.RawComment <> '' then Line(PascalizeComment(F.RawComment));
+  PascalName := DisambiguateIdent(F.Name);
   Params := '';
   for I := 0 to F.Params.Count - 1 do
   begin
@@ -513,9 +576,10 @@ begin
       '  { varargs — Blaise has no varargs syntax yet, call via wrapper }';
 
   if RetType = '' then
-    Sig := Format('procedure %s%s; %s;', [EscapeIdent(F.Name), Params, Modifiers])
+    Sig := Format('procedure %s%s; %s;', [PascalName, Params, Modifiers])
   else
-    Sig := Format('function %s%s: %s; %s;', [EscapeIdent(F.Name), Params, RetType, Modifiers]);
+    Sig := Format('function %s%s: %s; %s;', [PascalName, Params, RetType, Modifiers]);
+  FEmittedTypes.Add('fn:' + LowerCase(PascalName));
 
   Line(Sig + LocComment(F.Location));
 end;
@@ -610,10 +674,11 @@ procedure TBlaiseEmitter.EmitDecl(D: TBindingDecl);
 begin
   if D is TBindingFunction then
   begin
-    if FEmittedTypes.IndexOf('fn:' + LowerCase(D.Name)) >= 0 then Exit;
-    if FDeclaredTypeNames.IndexOf(LowerCase(D.Name)) >= 0 then Exit;
-    if IsBlaiseRtlGlobal(D.Name) then Exit;
-    FEmittedTypes.Add('fn:' + LowerCase(D.Name));
+    { Multiple FunctionDecl cursors with the same exact C name are
+      redeclarations; emit only the first. RTL/type-name collisions
+      are handled inside EmitFunction by '_' suffix renaming. }
+    if FEmittedTypes.IndexOf('cfn:' + D.Name) >= 0 then Exit;
+    FEmittedTypes.Add('cfn:' + D.Name);
     EmitFunction(TBindingFunction(D));
     Exit;
   end;
@@ -772,6 +837,9 @@ begin
         if FEmittedTypes.IndexOf(LowerCase(D.Name)) >= 0 then Continue;
         if BlaiseRejectsMacro(TBindingMacroConst(D).RawValue) then Continue;
         FEmittedTypes.Add(LowerCase(D.Name));
+        { Reserve so a same-named function (windows.h's STRETCHBLT
+          const vs StretchBlt API) renames the function side. }
+        FDeclaredTypeNames.Add(LowerCase(D.Name));
         EmitMacro(TBindingMacroConst(D));
       end
       else if D is TBindingEnum then
@@ -780,6 +848,7 @@ begin
           EC := TBindingEnum(D).Constants.Items[J];
           if FEmittedTypes.IndexOf(LowerCase(EC.Name)) >= 0 then Continue;
           FEmittedTypes.Add(LowerCase(EC.Name));
+          FDeclaredTypeNames.Add(LowerCase(EC.Name));
           Line(Format('  %s = %d;', [EscapeIdent(EC.Name), EC.Value]));
         end;
     end;
