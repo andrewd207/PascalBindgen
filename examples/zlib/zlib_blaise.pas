@@ -177,7 +177,6 @@ function inflateValidate(arg1: z_streamp; arg2: Integer): Integer; external name
 function inflateCodesUsed(arg1: z_streamp): UInt64; external name 'inflateCodesUsed';  { zlib.h:1919 }
 function inflateResetKeep(arg1: z_streamp): Integer; external name 'inflateResetKeep';  { zlib.h:1920 }
 function deflateResetKeep(arg1: z_streamp): Integer; external name 'deflateResetKeep';  { zlib.h:1921 }
-function gzvprintf(file: gzFile; format: PChar; va: va_list): Integer; external name 'gzvprintf';  { zlib.h:1928 }
 
 implementation
 

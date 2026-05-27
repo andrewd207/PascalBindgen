@@ -165,6 +165,8 @@ begin
   { Strip 'const ' prefix for the purpose of mapping the underlying
     primitive. Const-qualification is handled at the param level. }
   if Copy(S, 1, 6) = 'const ' then S := Trim(Copy(S, 7, MaxInt));
+  if Copy(S, 1, 9) = 'volatile ' then S := Trim(Copy(S, 10, MaxInt));
+  if Copy(S, 1, 6) = 'const ' then S := Trim(Copy(S, 7, MaxInt));
   if      S = 'void'                  then Result := ''
   else if S = 'bool'                  then Result := 'cbool'
   else if S = '_Bool'                 then Result := 'cbool'
@@ -215,6 +217,15 @@ end;
 
 function TFpcEmitter.MapTypeForSig(T: TBindingType): string;
 begin
+  { Inline function pointers can't appear mid-parameter-list in FPC
+    (the trailing `cdecl;` collides with the next param's separator).
+    Typedef'd ones come through as tkTypedefRef and stay readable;
+    anonymous ones degrade to Pointer. }
+  if (T <> nil) and (T.Kind = tkFunctionPointer) then
+  begin
+    Result := 'Pointer';
+    Exit;
+  end;
   Result := AliasPointer(MapType(T));
 end;
 
@@ -284,6 +295,10 @@ begin
       begin
         if T.Pointee = nil then
           Result := 'Pointer'
+        else if T.Pointee.Kind = tkFunctionPointer then
+          { Pointer-to-function-pointer collapses to Pointer — Pascal
+            procedural types are already handle-shaped. }
+          Result := 'Pointer'
         else
         begin
           Inner := MapType(T.Pointee);
@@ -309,6 +324,8 @@ begin
         { Strip 'struct '/'union '/'enum ' prefixes that survive when
           a tag is referenced bare in C. }
         Inner := T.Spelling;
+        if Copy(Inner, 1, 6) = 'const ' then Delete(Inner, 1, 6);
+        if Copy(Inner, 1, 9) = 'volatile ' then Delete(Inner, 1, 9);
         if Copy(Inner, 1, 7)  = 'struct '  then Delete(Inner, 1, 7)
         else if Copy(Inner, 1, 6) = 'union '  then Delete(Inner, 1, 6)
         else if Copy(Inner, 1, 5) = 'enum '   then Delete(Inner, 1, 5);
@@ -489,6 +506,11 @@ begin
     EmitFunction(TBindingFunction(D));
     Exit;
   end;
+  { Vacuous self-typedef (`typedef struct X X;`) — don't claim the
+    name in FEmittedTypes, so a later struct decl can still emit. }
+  if (D is TBindingTypedef)
+     and (MapType(TBindingTypedef(D).Aliased) = D.Name) then
+    Exit;
   { Type decls dedup by name. libclang surfaces forward decls and
     their later completions as separate cursors with the same
     spelling (zlib's gzFile_s hits this); emit only once. }
@@ -511,8 +533,15 @@ begin
   for I := 0 to U.Decls.Count - 1 do
   begin
     D := U.Decls.Items[I];
-    if not (D is TBindingFunction) then
-      FDeclaredTypeNames.Add(D.Name);
+    if D is TBindingFunction then Continue;
+    if D is TBindingMacroConst then Continue;
+    { Exclude vacuous self-typedefs (`typedef struct X X;`) — they
+      don't emit a body, so the name they hold isn't actually
+      declared in the unit. }
+    if (D is TBindingTypedef)
+       and (MapType(TBindingTypedef(D).Aliased) = D.Name) then
+      Continue;
+    FDeclaredTypeNames.Add(D.Name);
   end;
   CollectFunctionPointerAliases(U);
   EmitProvenance(U);
@@ -548,6 +577,27 @@ begin
       function-pointer typedef body. }
     if FPointerAliases.Count > 0 then
     begin
+      { Opaque forward record for any pointee that isn't declared in
+        the unit and isn't a ctypes-known primitive — covers SQLite-
+        style nested-in-struct types referenced only via pointer.
+        Skip: ctypes-style primitives (cint/cuint/...), built-in
+        Pascal types, and intermediate pointer-alias names like
+        'PX' where 'X' is itself a pointer-alias entry. }
+      for I := 0 to FPointerAliases.Count - 1 do
+      begin
+        if FDeclaredTypeNames.IndexOf(FPointerAliases[I]) >= 0 then Continue;
+        if Pos('c', FPointerAliases[I]) = 1 then Continue;
+        if (LowerCase(FPointerAliases[I]) = 'pointer')
+           or (LowerCase(FPointerAliases[I]) = 'pansichar')
+           or (LowerCase(FPointerAliases[I]) = 'pchar')
+           or (LowerCase(FPointerAliases[I]) = 'pwidechar')
+           or (LowerCase(FPointerAliases[I]) = 'pbyte') then Continue;
+        if (Length(FPointerAliases[I]) >= 2)
+           and (FPointerAliases[I][1] = 'P')
+           and (FPointerAliases.IndexOf(Copy(FPointerAliases[I], 2, MaxInt)) >= 0)
+           then Continue;
+        Line(Format('  %s = record end;', [FPointerAliases[I]]));
+      end;
       for I := 0 to FPointerAliases.Count - 1 do
         Line(Format('  P%s = ^%s;',
                     [FPointerAliases[I], FPointerAliases[I]]));

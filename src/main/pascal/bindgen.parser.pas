@@ -197,19 +197,50 @@ begin
     Result := TBindingType.Create(tkPrimitive, Spelling);
 end;
 
+function ContainsVaList(T: TClangType): Boolean;
+var
+  Spell: string;
+begin
+  Spell := T.Spelling;
+  Result := (Pos('__va_list_tag', Spell) > 0) or (Pos('va_list', Spell) > 0);
+end;
+
 function BuildFunction(C: TClangCursor): TBindingFunction;
 var
   FT, RT, AT: TClangType;
   Kids: TClangCursorArray;
   K: TClangCursor;
-  I, ParamIdx: Integer;
+  I, ParamIdx, NA: Integer;
   Param: TBindingParam;
+  HasVaList: Boolean;
 begin
   Result := TBindingFunction.Create(C.Spelling, CursorLoc(C));
   Result.CallingConv := ccCdecl;  { refine when CXCallingConv shim lands }
   AttachComment(Result, C);
   FT := C.TypeOf;
   try
+    { Reject va_list-typed signatures — Pascal has no portable
+      equivalent and the canonical 'struct __va_list_tag[1]' spelling
+      would otherwise leak through. The non-va counterpart almost
+      always exists and is reachable via varargs. }
+    HasVaList := False;
+    NA := FT.NumArgs;
+    for I := 0 to NA - 1 do
+    begin
+      AT := FT.Arg(I);
+      try
+        if ContainsVaList(AT) then HasVaList := True;
+      finally
+        AT.Free;
+      end;
+      if HasVaList then Break;
+    end;
+    if HasVaList then
+    begin
+      Result.Free;
+      Result := nil;
+      Exit;
+    end;
     RT := FT.ResultType;
     try
       Result.ReturnType := BuildType(RT);
@@ -431,7 +462,10 @@ begin
           K := Child.Kind;
           Decl := nil;
           if K = TClangKinds.FunctionDecl then
-            Decl := BuildFunction(Child)
+          begin
+            Decl := BuildFunction(Child);
+            if Decl = nil then Continue;
+          end
           else if K = TClangKinds.TypedefDecl then
             Decl := BuildTypedef(Child)
           else if K = TClangKinds.StructDecl then

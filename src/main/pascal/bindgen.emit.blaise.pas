@@ -100,6 +100,8 @@ var
 begin
   S := Trim(Spelling);
   if Copy(S, 1, 6) = 'const ' then S := Trim(Copy(S, 7, MaxInt));
+  if Copy(S, 1, 9) = 'volatile ' then S := Trim(Copy(S, 10, MaxInt));
+  if Copy(S, 1, 6) = 'const ' then S := Trim(Copy(S, 7, MaxInt));
   if      S = 'void'                  then Result := ''
   else if S = 'bool'                  then Result := 'Boolean'
   else if S = '_Bool'                 then Result := 'Boolean'
@@ -132,6 +134,8 @@ begin
       begin
         if T.Pointee = nil then
           Result := 'Pointer'
+        else if T.Pointee.Kind = tkFunctionPointer then
+          Result := 'Pointer'
         else
         begin
           Inner := MapType(T.Pointee);
@@ -155,6 +159,8 @@ begin
     tkRecordRef, tkEnumRef, tkTypedefRef:
       begin
         Inner := T.Spelling;
+        if Copy(Inner, 1, 6) = 'const ' then Delete(Inner, 1, 6);
+        if Copy(Inner, 1, 9) = 'volatile ' then Delete(Inner, 1, 9);
         if      Copy(Inner, 1, 7) = 'struct '  then Delete(Inner, 1, 7)
         else if Copy(Inner, 1, 6) = 'union '   then Delete(Inner, 1, 6)
         else if Copy(Inner, 1, 5) = 'enum '    then Delete(Inner, 1, 5);

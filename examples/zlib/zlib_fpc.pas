@@ -195,7 +195,6 @@ function inflateValidate(arg1: z_streamp; arg2: cint): cint; cdecl; external 'li
 function inflateCodesUsed(arg1: z_streamp): culong; cdecl; external 'libz' name 'inflateCodesUsed';  { zlib.h:1919 }
 function inflateResetKeep(arg1: z_streamp): cint; cdecl; external 'libz' name 'inflateResetKeep';  { zlib.h:1920 }
 function deflateResetKeep(arg1: z_streamp): cint; cdecl; external 'libz' name 'deflateResetKeep';  { zlib.h:1921 }
-function gzvprintf(file_: gzFile; format: PAnsiChar; va: struct __va_list_tag[1]): cint; cdecl; external 'libz' name 'gzvprintf';  { zlib.h:1928 }
 
 implementation
 
