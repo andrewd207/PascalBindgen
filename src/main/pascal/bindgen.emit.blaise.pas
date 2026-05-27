@@ -30,7 +30,7 @@ unit bindgen.emit.blaise;
 interface
 
 uses
-  Classes, SysUtils, bindgen.ir;
+  Classes, SysUtils, bindgen.ir, bindgen.parser;
 
 type
   TBlaiseEmitter = class
@@ -76,19 +76,19 @@ implementation
   FPC's plus a few Blaise-specific words. Names matching this list
   get a '_' suffix when emitted; Blaise has no '&Ident' escape. }
 const
-  BLAISE_RESERVED: array[0..71] of string = (
-    'absolute','and','array','as','asm','begin','case','class',
-    'const','constructor','destructor','div','do','downto','else',
-    'end','except','exports','external','file','finalization','finally',
-    'for','function','goto','if','implementation','in','inherited',
-    'initialization','inline','interface','is','label','library','mod',
-    'nil','not','object','of','on','operator','or','out','packed',
-    'procedure','program','property','raise','record','repeat',
-    'resourcestring','set','shl','shr','string','then',
-    'threadvar','to','try','type','unit','until','uses','var',
-    'while','with','xor',
+  BLAISE_RESERVED: array[0..77] of string = (
+    'absolute','and','array','as','asm','begin','break','case',
+    'class','const','constructor','continue','destructor','div','do',
+    'downto','else','end','except','exit','exports','external','file',
+    'finalization','finally','for','function','goto','halt','if',
+    'implementation','in','inherited','initialization','inline',
+    'interface','is','label','library','mod','nil','not','object',
+    'of','on','operator','or','out','packed','procedure','program',
+    'property','raise','record','repeat','result','resourcestring',
+    'set','shl','shr','string','then','threadvar','to','try','type',
+    'unit','until','uses','var','while','with','xor',
     { Blaise built-ins that aren't keywords but collide as identifiers }
-    'integer','boolean','pointer','pchar'
+    'abort','integer','boolean','pointer','pchar'
   );
 
 constructor TBlaiseEmitter.Create(const AUnitName, ALibrary: string);
@@ -121,6 +121,21 @@ begin
   inherited Destroy;
 end;
 
+{ Blaise RTL functions that surface in the global namespace and
+  clash with same-named C externs (windows.h's ReadFile vs
+  TRtlPlatform.ReadFile, ...). Used by EmitDecl to drop the
+  externs silently. Case-folded. }
+function IsBlaiseRtlGlobal(const S: string): Boolean;
+var
+  L: string;
+begin
+  L := LowerCase(S);
+  Result := (L = 'readfile') or (L = 'writefile')
+         or (L = 'halt') or (L = 'exit') or (L = 'write')
+         or (L = 'writeln') or (L = 'strlen')
+         or (L = 'paramcount') or (L = 'paramstr');
+end;
+
 { Blaise built-in or RTL-provided identifiers. Used to suppress
   forward-record stubs that would shadow them, and to prevent
   spurious 'Foo = record end' next to a 'PFoo = ^Foo' pointer alias
@@ -130,12 +145,12 @@ var
   L: string;
 begin
   L := LowerCase(S);
-  Result := (L = 'pointer') or (L = 'pchar') or (L = 'pbyte')
+  Result := (L = 'pointer') or (L = 'pchar')
          or (L = 'va_list') or (L = '__va_list_tag')
          or (L = 'byte') or (L = 'word') or (L = 'smallint')
          or (L = 'integer') or (L = 'cardinal')
-         or (L = 'int64') or (L = 'uint64')
-         or (L = 'uint16') or (L = 'uint32')
+         or (L = 'int16') or (L = 'int64')
+         or (L = 'uint16') or (L = 'uint32') or (L = 'uint64')
          or (L = 'single') or (L = 'double')
          or (L = 'boolean') or (L = 'string');
 end;
@@ -349,7 +364,8 @@ begin
      or (Pos('(anonymous ', T.Spelling) > 0)
      or (Pos('__va_list_tag', T.Spelling) > 0)
      or (Pos('__builtin_va_list', T.Spelling) > 0)
-     or (Pos('__attribute__', T.Spelling) > 0) then
+     or (Pos('__attribute__', T.Spelling) > 0)
+     or (Pos('__WIDL_', T.Spelling) > 0) then  { MIDL anonymous-union names }
   begin
     Result := 'Pointer';
     Exit;
@@ -582,13 +598,32 @@ begin
   Line(Format('  %s = %s;%s', [EscapeIdent(M.Name), M.RawValue, LocComment(M.Location)]));
 end;
 
+{ True when the macro's literal won't parse in Blaise. Right now
+  the only known case is hex literals > Int64 (FPC accepts QWord
+  literally; Blaise's lexer rejects them). }
+function BlaiseRejectsMacro(const RawValue: string): Boolean;
+begin
+  Result := ExceedsInt64Hex(RawValue);
+end;
+
 procedure TBlaiseEmitter.EmitDecl(D: TBindingDecl);
 begin
   if D is TBindingFunction then
   begin
+    if FEmittedTypes.IndexOf('fn:' + LowerCase(D.Name)) >= 0 then Exit;
+    if FDeclaredTypeNames.IndexOf(LowerCase(D.Name)) >= 0 then Exit;
+    if IsBlaiseRtlGlobal(D.Name) then Exit;
+    FEmittedTypes.Add('fn:' + LowerCase(D.Name));
     EmitFunction(TBindingFunction(D));
     Exit;
   end;
+  if (Pos('(', D.Name) > 0) or (Pos(' ', D.Name) > 0)
+     or (Pos('__WIDL_', D.Name) > 0) then
+    Exit;
+  { Blaise built-ins are case-folded; if a header re-typedefs one
+    of them (`typedef short INT16;`), Blaise sees a duplicate and
+    rejects the unit. Skip the redeclaration. }
+  if IsBlaiseBuiltin(D.Name) then Exit;
   { Vacuous self-typedef — don't claim the name in FEmittedTypes so
     a later StructDecl can still emit. }
   if (D is TBindingTypedef)
@@ -735,6 +770,7 @@ begin
       if D is TBindingMacroConst then
       begin
         if FEmittedTypes.IndexOf(LowerCase(D.Name)) >= 0 then Continue;
+        if BlaiseRejectsMacro(TBindingMacroConst(D).RawValue) then Continue;
         FEmittedTypes.Add(LowerCase(D.Name));
         EmitMacro(TBindingMacroConst(D));
       end

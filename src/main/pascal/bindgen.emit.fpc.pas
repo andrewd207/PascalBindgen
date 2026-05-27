@@ -288,7 +288,7 @@ begin
     else if Copy(RefName, 1, 6) = 'union '  then Delete(RefName, 1, 6)
     else if Copy(RefName, 1, 5) = 'enum '   then Delete(RefName, 1, 5);
     if Copy(RefName, 1, 6) = 'const '   then Delete(RefName, 1, 6);
-    if (FDeclaredTypeNames.IndexOf(RefName) < 0)
+    if (FDeclaredTypeNames.IndexOf(LowerCase(RefName)) < 0)
        and (T.CanonicalSpelling = '')
        and (RefName <> '')
        { Filter out pathological libclang spellings — GCC vector
@@ -363,7 +363,8 @@ begin
      or (Pos('(anonymous ', T.Spelling) > 0)
      or (Pos('__va_list_tag', T.Spelling) > 0)
      or (Pos('__builtin_va_list', T.Spelling) > 0)
-     or (Pos('__attribute__', T.Spelling) > 0) then
+     or (Pos('__attribute__', T.Spelling) > 0)
+     or (Pos('__WIDL_', T.Spelling) > 0) then  { MIDL anonymous-union names }
   begin
     Result := 'Pointer';
     Exit;
@@ -416,7 +417,7 @@ begin
           unit (filtered out as a system-header decl). 'z_size_t =
           size_t;' would otherwise reference an undeclared name. }
         if (T.Kind = tkTypedefRef)
-           and (FDeclaredTypeNames.IndexOf(Inner) < 0)
+           and (FDeclaredTypeNames.IndexOf(LowerCase(Inner)) < 0)
            and (T.CanonicalSpelling <> '') then
         begin
           { Canonical-is-enum (e.g. Vulkan's StdVideo*Idc typedefs
@@ -427,7 +428,7 @@ begin
             Result := MapPrimitive(T.CanonicalSpelling);
         end
         else if (T.Kind = tkEnumRef)
-                and (FDeclaredTypeNames.IndexOf(Inner) < 0) then
+                and (FDeclaredTypeNames.IndexOf(LowerCase(Inner)) < 0) then
           { C enums default to int; if the enum decl is in a header
             we filtered out (vk_video, ...) emit cuint as fallback. }
           Result := 'cuint'
@@ -582,7 +583,9 @@ begin
   if Aliased = '' then Aliased := 'Pointer';
   { Skip vacuous self-typedefs: `typedef struct Foo Foo;` produces a
     decl whose spelling is the same as the typedef name. }
-  if Aliased = T.Name then Exit;
+  { Pascal is case-insensitive, so 'CCHAR = cchar' is a self-typedef
+    (the same identifier on both sides). Skip lowered. }
+  if LowerCase(Aliased) = LowerCase(T.Name) then Exit;
   Line(Format('  %s = %s;%s', [EscapeIdent(T.Name), Aliased, LocComment(T.Location)]));
 end;
 
@@ -597,13 +600,29 @@ procedure TFpcEmitter.EmitDecl(D: TBindingDecl);
 begin
   if D is TBindingFunction then
   begin
+    { C has no overloads. Multiple FunctionDecl cursors with the
+      same name are either redeclarations or visibility-hidden
+      copies; emit only the first. }
+    if FEmittedTypes.IndexOf('fn:' + LowerCase(D.Name)) >= 0 then Exit;
+    { Case-insensitive collision with an already-emitted type
+      (windows.h declares both 'typedef ... STRETCHBLT;' and
+      'BOOL WINAPI StretchBlt(...);' — Pascal sees them as the
+      same identifier). Type wins; skip the function. }
+    if FDeclaredTypeNames.IndexOf(LowerCase(D.Name)) >= 0 then Exit;
+    FEmittedTypes.Add('fn:' + LowerCase(D.Name));
     EmitFunction(TBindingFunction(D));
     Exit;
   end;
+  { Skip decls whose names are libclang-internal blobs ('enum (unnamed
+    at ...)', '__WIDL_*', anything with parens or spaces). They'd
+    otherwise emit as invalid Pascal identifiers. }
+  if (Pos('(', D.Name) > 0) or (Pos(' ', D.Name) > 0)
+     or (Pos('__WIDL_', D.Name) > 0) then
+    Exit;
   { Vacuous self-typedef (`typedef struct X X;`) — don't claim the
     name in FEmittedTypes, so a later struct decl can still emit. }
   if (D is TBindingTypedef)
-     and (MapType(TBindingTypedef(D).Aliased) = D.Name) then
+     and (LowerCase(MapType(TBindingTypedef(D).Aliased)) = LowerCase(D.Name)) then
     Exit;
   { Type decls dedup by name. libclang surfaces forward decls and
     their later completions as separate cursors with the same
@@ -635,9 +654,9 @@ begin
       don't emit a body, so the name they hold isn't actually
       declared in the unit. }
     if (D is TBindingTypedef)
-       and (MapType(TBindingTypedef(D).Aliased) = D.Name) then
+       and (LowerCase(MapType(TBindingTypedef(D).Aliased)) = LowerCase(D.Name)) then
       Continue;
-    FDeclaredTypeNames.Add(D.Name);
+    FDeclaredTypeNames.Add(LowerCase(D.Name));
   end;
   CollectFunctionPointerAliases(U);
   EmitProvenance(U);
@@ -695,7 +714,7 @@ begin
       types we never declared. Layout will not match C — this is a
       v1 "compile, don't crash" measure. }
     for I := 0 to FOpaqueTypedefs.Count - 1 do
-      if FDeclaredTypeNames.IndexOf(FOpaqueTypedefs[I]) < 0 then
+      if FDeclaredTypeNames.IndexOf(LowerCase(FOpaqueTypedefs[I])) < 0 then
         { Default to Pointer — overwhelmingly the right ABI size for
           handle-like opaque types (Display *, EGLNativeDisplayType,
           most platform handles). Wrong only for the rare opaque
@@ -718,7 +737,7 @@ begin
         'PX' where 'X' is itself a pointer-alias entry. }
       for I := 0 to FPointerAliases.Count - 1 do
       begin
-        if FDeclaredTypeNames.IndexOf(FPointerAliases[I]) >= 0 then Continue;
+        if FDeclaredTypeNames.IndexOf(LowerCase(FPointerAliases[I])) >= 0 then Continue;
         if FOpaqueTypedefs.IndexOf(FPointerAliases[I]) >= 0 then Continue;
         if Pos('c', FPointerAliases[I]) = 1 then Continue;
         if (LowerCase(FPointerAliases[I]) = 'pointer')
@@ -755,7 +774,7 @@ begin
         { Windows headers ship a hand-written 'PULONG = ^ULONG;' family;
           skip our auto-alias when the same name is already declared
           by the source. Pascal is case-insensitive. }
-        if FDeclaredTypeNames.IndexOf('P' + FPointerAliases[I]) >= 0 then
+        if FDeclaredTypeNames.IndexOf(LowerCase('P' + FPointerAliases[I])) >= 0 then
           Continue;
         Line(Format('  P%s = ^%s;',
                     [FPointerAliases[I], EscapeIdent(FPointerAliases[I])]));
@@ -794,6 +813,9 @@ begin
       begin
         if FEmittedTypes.IndexOf(LowerCase(D.Name)) >= 0 then Continue;
         FEmittedTypes.Add(LowerCase(D.Name));
+        { Reserve so a same-named function (windows.h's STRETCHBLT
+          const vs StretchBlt API) doesn't collide. }
+        FDeclaredTypeNames.Add(LowerCase(D.Name));
         EmitMacro(TBindingMacroConst(D));
       end
       else if D is TBindingEnum then
@@ -802,6 +824,7 @@ begin
           EC := TBindingEnum(D).Constants.Items[J];
           if FEmittedTypes.IndexOf(LowerCase(EC.Name)) >= 0 then Continue;
           FEmittedTypes.Add(LowerCase(EC.Name));
+          FDeclaredTypeNames.Add(LowerCase(EC.Name));
           Line(Format('  %s = %d;', [EscapeIdent(EC.Name), EC.Value]));
         end;
     end;

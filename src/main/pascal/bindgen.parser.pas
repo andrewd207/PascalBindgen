@@ -32,6 +32,9 @@ uses
   procedure`. }
 function ParseHeader(const HeaderPath: string;
                      const ExtraArgs: array of string): TBindingUnit; overload;
+{ True for hex literals beyond signed Int64 ('$8000000000000000' and
+  larger). FPC parses these as QWord; Blaise's lexer doesn't. }
+function ExceedsInt64Hex(const Lit: string): Boolean;
 { Convenience overload — Blaise rejects empty array literals at call sites. }
 function ParseHeader(const HeaderPath: string): TBindingUnit; overload;
 
@@ -424,6 +427,25 @@ begin
   else
     OutLit := Sign + Body;
   Result := True;
+end;
+
+{ A hex literal that exceeds signed Int64 range. FPC parses these
+  fine as QWord; Blaise's lexer rejects anything > $7FFFFFFFFFFFFFFF
+  regardless of target type. Used by the Blaise emitter to drop
+  affected macros. }
+function ExceedsInt64Hex(const Lit: string): Boolean;
+var
+  S: string;
+begin
+  Result := False;
+  S := Lit;
+  if (Length(S) >= 1) and ((S[1] = '-') or (S[1] = '+')) then
+    Delete(S, 1, 1);
+  if (Length(S) < 2) or (S[1] <> '$') then Exit;
+  Delete(S, 1, 1);
+  if Length(S) > 16 then begin Result := True; Exit; end;
+  if Length(S) = 16 then
+    Result := (S[1] > '7');  { '8'..'9', 'A'..'F' all > '7' }
 end;
 
 function BuildMacro(C: TClangCursor): TBindingMacroConst;
