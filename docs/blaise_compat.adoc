@@ -48,7 +48,7 @@ linked in.
 | `array of const` (e.g. `Format('%d', [x])`, `Exception.CreateFmt`) | Supported via `TVarRec` | Not yet — `Semantic error: Array literal element N has type 'string'; expected 'Integer'`. Workaround: concat with `IntToStr`/`FloatToStr`.
 | `@OutOrVarParam` (taking address of a `var`/`out` parameter) | OK | `Code generation error: Unsupported L-value form for var argument`. Workaround: stage through a local, then assign back.
 | `@dynArr[0]` (address of dyn-array element)               | OK | Same codegen error. Workaround: `Pointer(arr)` gives the base pointer.
-| `P[i]` indexing of typed pointer (`PByte = ^Byte`)        | OK in mode delphi | `Semantic error: 'P' is not a static array or dynamic array`. The `type PByte = ^Byte` declaration itself parses; only `[]` indexing on it fails. Workaround: pointer arithmetic via `PtrUInt`, then deref or `memcpy`.
+| `P[i]` indexing of typed pointer (`PByte = ^Byte`)        | OK in mode delphi | `Semantic error: 'P' is not a static array or dynamic array` (or, with a cast, `String subscript '[]' requires a string expression`). The `type PByte = ^Byte` declaration itself parses, and typed-pointer arithmetic + deref works (`(P + i)^`); only `[]` dispatch on a pointer is missing.
 | Constant-expression array bounds (e.g. `array[0..CHUNK-1]`) | OK     | `Parse error: Expected integer bound`. Workaround: literal bound.
 |===
 
