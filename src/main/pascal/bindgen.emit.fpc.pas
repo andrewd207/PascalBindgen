@@ -44,6 +44,7 @@ type
     FEmittedTypes: TStringList;
     FDeclaredTypeNames: TStringList;
     FPointerAliases: TStringList;
+    FOpaqueTypedefs: TStringList;
     procedure Line(const S: string = '');
     procedure EmitProvenance(U: TBindingUnit);
     procedure EmitDecl(D: TBindingDecl);
@@ -82,6 +83,9 @@ begin
   FPointerAliases := TStringList.Create;
   FPointerAliases.Sorted := True;
   FPointerAliases.Duplicates := dupIgnore;
+  FOpaqueTypedefs := TStringList.Create;
+  FOpaqueTypedefs.Sorted := True;
+  FOpaqueTypedefs.Duplicates := dupIgnore;
   FDeclaredTypeNames := TStringList.Create;
   FDeclaredTypeNames.Sorted := True;
   FDeclaredTypeNames.Duplicates := dupIgnore;
@@ -128,6 +132,7 @@ begin
   FOutput.Free;
   FEmittedTypes.Free;
   FPointerAliases.Free;
+  FOpaqueTypedefs.Free;
   FDeclaredTypeNames.Free;
   inherited Destroy;
 end;
@@ -141,9 +146,18 @@ end;
   We keep the original /** ... */ text inside the wrapper so Doxygen
   markup is preserved for any tool that still wants to grep for it. }
 function PascalizeComment(const Raw: string): string;
+var
+  S: string;
 begin
-  if Trim(Raw) = '' then Result := ''
-  else Result := '(* ' + Raw + ' *)';
+  if Trim(Raw) = '' then begin Result := ''; Exit; end;
+  { Both Pascal comment forms can nest inside a Doxygen body
+    (regex examples, brace-style struct literals). Rewrite them so
+    the wrapper (* ... *) stays balanced. }
+  S := StringReplace(Raw, '(*', '( *', [rfReplaceAll]);
+  S := StringReplace(S, '*)', '* )', [rfReplaceAll]);
+  S := StringReplace(S, '{', '[', [rfReplaceAll]);
+  S := StringReplace(S, '}', ']', [rfReplaceAll]);
+  Result := '(* ' + S + ' *)';
 end;
 
 function TFpcEmitter.LocComment(const Loc: TSourceLoc): string;
@@ -162,6 +176,15 @@ var
   S: string;
 begin
   S := Trim(Spelling);
+  { Reject any spelling that doesn't look like a plain identifier
+    chain — libclang occasionally surfaces __attribute__/vector
+    forms that no Pascal compiler will accept. }
+  if (Pos('(', S) > 0) or (Pos('__attribute', S) > 0)
+     or (Pos('__vector', S) > 0) then
+  begin
+    Result := 'Pointer';
+    Exit;
+  end;
   { Strip 'const ' prefix for the purpose of mapping the underlying
     primitive. Const-qualification is handled at the param level. }
   if Copy(S, 1, 6) = 'const ' then S := Trim(Copy(S, 7, MaxInt));
@@ -226,6 +249,13 @@ begin
     Result := 'Pointer';
     Exit;
   end;
+  { C array parameter (`float foo[4]`) decays to a pointer at the
+    ABI level. Render as a pointer alias so FPC accepts the param. }
+  if (T <> nil) and (T.Kind = tkArray) and (T.Pointee <> nil) then
+  begin
+    Result := AliasPointer('^' + MapType(T.Pointee));
+    Exit;
+  end;
   Result := AliasPointer(MapType(T));
 end;
 
@@ -238,11 +268,37 @@ end;
 procedure TFpcEmitter.WalkTypeForAliases(T: TBindingType);
 var
   J: Integer;
-  Discard: string;
+  Discard, RefName: string;
 begin
   if T = nil then Exit;
   Discard := AliasPointer(MapType(T));
   if Discard = '' then ;
+  { Collect any typedef-ref name that isn't a declared local type and
+    has no usable canonical primitive — these need an opaque stub
+    so the unit links. Covers system typedefs that leaked into a
+    field type (pthread_mutex_t, etc.). }
+  if (T.Kind = tkTypedefRef) then
+  begin
+    RefName := T.Spelling;
+    if Copy(RefName, 1, 7) = 'struct ' then Delete(RefName, 1, 7)
+    else if Copy(RefName, 1, 6) = 'union '  then Delete(RefName, 1, 6)
+    else if Copy(RefName, 1, 5) = 'enum '   then Delete(RefName, 1, 5);
+    if Copy(RefName, 1, 6) = 'const '   then Delete(RefName, 1, 6);
+    if (FDeclaredTypeNames.IndexOf(RefName) < 0)
+       and (T.CanonicalSpelling = '')
+       and (RefName <> '')
+       { Filter out pathological libclang spellings — GCC vector
+         attributes, va_list internals, anything with parens or
+         commas (not a legal Pascal identifier). }
+       and (Pos('(', RefName) = 0)
+       and (Pos(')', RefName) = 0)
+       and (Pos(',', RefName) = 0)
+       and (Pos(' ', RefName) = 0)
+       and (Pos('*', RefName) = 0)
+       and (Pos('__va_list_tag', RefName) = 0)
+       and (Copy(RefName, 1, 2) <> '__') then
+      FOpaqueTypedefs.Add(RefName);
+  end;
   if T.Pointee <> nil then WalkTypeForAliases(T.Pointee);
   if T.FuncReturn <> nil then WalkTypeForAliases(T.FuncReturn);
   if T.FuncParams <> nil then
@@ -251,6 +307,11 @@ begin
 end;
 
 procedure TFpcEmitter.CollectFunctionPointerAliases(U: TBindingUnit);
+  procedure DoClear;
+  begin
+    FPointerAliases.Clear;
+    FOpaqueTypedefs.Clear;
+  end;
 var
   I, J: Integer;
   D: TBindingDecl;
@@ -258,7 +319,7 @@ var
   R: TBindingRecord;
   Td: TBindingTypedef;
 begin
-  FPointerAliases.Clear;
+  DoClear;
   for I := 0 to U.Decls.Count - 1 do
   begin
     D := U.Decls.Items[I];
@@ -290,6 +351,16 @@ var
   Params, Ret: string;
 begin
   if T = nil then begin Result := 'Pointer'; Exit; end;
+  { Anonymous nested records ('(unnamed union at ...)') and other
+    libclang-internal spellings collapse to Pointer-sized blobs. }
+  if (Pos('(unnamed ', T.Spelling) > 0)
+     or (Pos('(anonymous ', T.Spelling) > 0)
+     or (Pos('__va_list_tag', T.Spelling) > 0)
+     or (Pos('__attribute__', T.Spelling) > 0) then
+  begin
+    Result := 'Pointer';
+    Exit;
+  end;
   case T.Kind of
     tkPointer:
       begin
@@ -299,6 +370,11 @@ begin
           { Pointer-to-function-pointer collapses to Pointer — Pascal
             procedural types are already handle-shaped. }
           Result := 'Pointer'
+        else if T.Pointee.Kind = tkPointer then
+          { Multi-level pointer (^^X) — FPC won't forward-resolve the
+            inner '^X' in this position, so route through AliasPointer
+            which registers 'PX = ^X' and returns 'PPX'. }
+          Result := AliasPointer('^' + MapType(T.Pointee))
         else
         begin
           Inner := MapType(T.Pointee);
@@ -430,11 +506,14 @@ begin
   if R.IsUnion then
   begin
     Line(Format('  %s = record  { union } %s', [EscapeIdent(R.Name), LocComment(R.Location)]));
-    Line('    case Integer of');
-    for I := 0 to R.Fields.Count - 1 do
+    if R.Fields.Count > 0 then
     begin
-      F := R.Fields.Items[I];
-      Line(Format('      %d: (%s: %s);', [I, EscapeIdent(F.Name), MapType(F.FieldType)]));
+      Line('    case Integer of');
+      for I := 0 to R.Fields.Count - 1 do
+      begin
+        F := R.Fields.Items[I];
+        Line(Format('      %d: (%s: %s);', [I, EscapeIdent(F.Name), MapType(F.FieldType)]));
+      end;
     end;
     Line('  end;');
   end
@@ -456,9 +535,7 @@ end;
 
 procedure TFpcEmitter.EmitEnum(E: TBindingEnum);
 var
-  I: Integer;
   Underlying: string;
-  C: TBindingEnumConst;
 begin
   if E.RawComment <> '' then Line(PascalizeComment(E.RawComment));
   if E.UnderlyingType <> nil then
@@ -467,16 +544,9 @@ begin
     Underlying := 'cint';
   if Underlying = '' then Underlying := 'cint';
   Line(Format('  %s = %s;%s', [EscapeIdent(E.Name), Underlying, LocComment(E.Location)]));
-  if E.Constants.Count > 0 then
-  begin
-    Line('const');
-    for I := 0 to E.Constants.Count - 1 do
-    begin
-      C := E.Constants.Items[I];
-      Line(Format('  %s = %d;', [EscapeIdent(C.Name), C.Value]));
-    end;
-    Line('type');
-  end;
+  { Enum constants land in a unified const block emitted after the
+    entire type section so forward `^X` references stay resolvable
+    across the whole section. }
 end;
 
 procedure TFpcEmitter.EmitTypedef(T: TBindingTypedef);
@@ -526,6 +596,8 @@ var
   I: Integer;
   D: TBindingDecl;
   HasTypes, HasFuncs, HasMacros: Boolean;
+  J: Integer;
+  EC: TBindingEnumConst;
 begin
   FOutput.Clear;
   FEmittedTypes.Clear;
@@ -566,9 +638,16 @@ begin
     else if not (D is TBindingMacroConst) then HasTypes := True;
   end;
 
-  if HasTypes or (FPointerAliases.Count > 0) then
+  if HasTypes or (FPointerAliases.Count > 0) or (FOpaqueTypedefs.Count > 0) then
   begin
     Line('type');
+    { Opaque stubs for typedef-ref names that reference system-header
+      types we never declared. Layout will not match C — this is a
+      v1 "compile, don't crash" measure. }
+    for I := 0 to FOpaqueTypedefs.Count - 1 do
+      if FDeclaredTypeNames.IndexOf(FOpaqueTypedefs[I]) < 0 then
+        Line(Format('  %s = record end;  { opaque — layout unknown }',
+                    [EscapeIdent(FOpaqueTypedefs[I])]));
     { Synthesized 'P<X> = ^X' aliases emitted FIRST so any typedef
       with an inline procedural-type RHS referencing them resolves.
       FPC accepts the forward 'X' name in '^X' (single-pointer
@@ -586,6 +665,7 @@ begin
       for I := 0 to FPointerAliases.Count - 1 do
       begin
         if FDeclaredTypeNames.IndexOf(FPointerAliases[I]) >= 0 then Continue;
+        if FOpaqueTypedefs.IndexOf(FPointerAliases[I]) >= 0 then Continue;
         if Pos('c', FPointerAliases[I]) = 1 then Continue;
         if (LowerCase(FPointerAliases[I]) = 'pointer')
            or (LowerCase(FPointerAliases[I]) = 'pansichar')
@@ -596,11 +676,29 @@ begin
            and (FPointerAliases[I][1] = 'P')
            and (FPointerAliases.IndexOf(Copy(FPointerAliases[I], 2, MaxInt)) >= 0)
            then Continue;
-        Line(Format('  %s = record end;', [FPointerAliases[I]]));
+        { Filter pathological libclang spellings — see WalkTypeForAliases. }
+        if (Pos('(', FPointerAliases[I]) > 0)
+           or (Pos(')', FPointerAliases[I]) > 0)
+           or (Pos(',', FPointerAliases[I]) > 0)
+           or (Pos(' ', FPointerAliases[I]) > 0)
+           or (Pos('*', FPointerAliases[I]) > 0)
+           or (Pos('__va_list_tag', FPointerAliases[I]) > 0)
+           or (Copy(FPointerAliases[I], 1, 2) = '__') then Continue;
+        Line(Format('  %s = record end;', [EscapeIdent(FPointerAliases[I])]));
       end;
       for I := 0 to FPointerAliases.Count - 1 do
+      begin
+        { Same pathological-spelling filter as above — skip aliases
+          whose target name isn't a legal Pascal identifier. }
+        if (Pos('(', FPointerAliases[I]) > 0)
+           or (Pos(')', FPointerAliases[I]) > 0)
+           or (Pos(',', FPointerAliases[I]) > 0)
+           or (Pos(' ', FPointerAliases[I]) > 0)
+           or (Pos('*', FPointerAliases[I]) > 0)
+           or (Pos('__va_list_tag', FPointerAliases[I]) > 0) then Continue;
         Line(Format('  P%s = ^%s;',
-                    [FPointerAliases[I], FPointerAliases[I]]));
+                    [FPointerAliases[I], EscapeIdent(FPointerAliases[I])]));
+      end;
     end;
     for I := 0 to U.Decls.Count - 1 do
     begin
@@ -612,19 +710,39 @@ begin
     Line;
   end;
 
-  { #define integer-constant macros emitted as a const block. }
+  { #define integer-constant macros + enum constants emit as a
+    single const block after the type section ends. }
   HasMacros := False;
   for I := 0 to U.Decls.Count - 1 do
-    if U.Decls.Items[I] is TBindingMacroConst then
+  begin
+    D := U.Decls.Items[I];
+    if D is TBindingMacroConst then begin HasMacros := True; Break; end;
+    if (D is TBindingEnum) and (TBindingEnum(D).Constants.Count > 0) then
     begin HasMacros := True; Break; end;
+  end;
   if HasMacros then
   begin
     Line('const');
+    { Pascal is case-insensitive — dedup const names case-insensitively
+      to silence collisions like GDK_KEY_a vs GDK_KEY_A. First wins. }
+    FEmittedTypes.Clear;
     for I := 0 to U.Decls.Count - 1 do
     begin
       D := U.Decls.Items[I];
       if D is TBindingMacroConst then
+      begin
+        if FEmittedTypes.IndexOf(LowerCase(D.Name)) >= 0 then Continue;
+        FEmittedTypes.Add(LowerCase(D.Name));
         EmitMacro(TBindingMacroConst(D));
+      end
+      else if D is TBindingEnum then
+        for J := 0 to TBindingEnum(D).Constants.Count - 1 do
+        begin
+          EC := TBindingEnum(D).Constants.Items[J];
+          if FEmittedTypes.IndexOf(LowerCase(EC.Name)) >= 0 then Continue;
+          FEmittedTypes.Add(LowerCase(EC.Name));
+          Line(Format('  %s = %d;', [EscapeIdent(EC.Name), EC.Value]));
+        end;
     end;
     Line;
   end;

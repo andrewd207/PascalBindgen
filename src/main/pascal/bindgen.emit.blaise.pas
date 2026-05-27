@@ -54,9 +54,15 @@ type
 implementation
 
 function TBlaiseEmitter.PascalizeComment(const Raw: string): string;
+var
+  S: string;
 begin
-  if Trim(Raw) = '' then Result := ''
-  else Result := '(* ' + Raw + ' *)';
+  if Trim(Raw) = '' then begin Result := ''; Exit; end;
+  S := StringReplace(Raw, '(*', '( *', [rfReplaceAll]);
+  S := StringReplace(S, '*)', '* )', [rfReplaceAll]);
+  S := StringReplace(S, #123, '[', [rfReplaceAll]);
+  S := StringReplace(S, #125, ']', [rfReplaceAll]);
+  Result := '(* ' + S + ' *)';
 end;
 
 constructor TBlaiseEmitter.Create(const AUnitName, ALibrary: string);
