@@ -129,6 +129,10 @@ type
     destructor Destroy; override;
     function Parse(const FileName: string;
                    const ExtraArgs: array of string): TClangTranslationUnit;
+    { Convenience: Blaise rejects empty array literals (`[]`) and does
+      not support class-method overloads, so the no-args path lives
+      under a distinct name. }
+    function ParseNoArgs(const FileName: string): TClangTranslationUnit;
   end;
 
 var
@@ -185,9 +189,25 @@ begin
   else
     rc := pbg_parse_tu(FHandle, PChar(FileName), PPCharArray(Pointer(argv)), n, @tu);
   if rc <> 0 then
-    { Concat rather than Format-style: Blaise has no array-of-const yet. }
-    raise EClangError.Create('parseTranslationUnit failed (CXErrorCode=' +
-                             IntToStr(rc) + ') for "' + FileName + '"');
+    { Use Format + Create instead of CreateFmt: Blaise's Exception
+      has no CreateFmt overload, but Format itself works. }
+    raise EClangError.Create(Format(
+      'parseTranslationUnit failed (CXErrorCode=%d) for "%s"',
+      [rc, FileName]));
+  Result := TClangTranslationUnit.Create(tu);
+end;
+
+function TClangIndex.ParseNoArgs(const FileName: string): TClangTranslationUnit;
+var
+  rc: cint;
+  tu: PPbgTU;
+begin
+  tu := nil;
+  rc := pbg_parse_tu(FHandle, PChar(FileName), nil, 0, @tu);
+  if rc <> 0 then
+    raise EClangError.Create(Format(
+      'parseTranslationUnit failed (CXErrorCode=%d) for "%s"',
+      [rc, FileName]));
   Result := TClangTranslationUnit.Create(tu);
 end;
 

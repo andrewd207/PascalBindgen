@@ -114,7 +114,7 @@ begin
   try
     AssertEquals('name', 'add', F.Name);
     AssertEquals('file', 'a.h', F.Location.FileName);
-    AssertEquals('line', 12, F.Location.Line);
+    AssertEquals('line', 12, Integer(F.Location.Line));
   finally
     F.Free;
   end;
@@ -185,7 +185,7 @@ end;
 
 function TParserTests.Parse: TBindingUnit;
 begin
-  Result := ParseHeader(SampleHeader, []);
+  Result := ParseHeader(SampleHeader);
 end;
 
 procedure TParserTests.ExtractsExpectedTopLevelDecls;
@@ -399,7 +399,7 @@ var
   U: TBindingUnit;
   E: TFpcEmitter;
 begin
-  U := ParseHeader(SampleHeader, []);
+  U := ParseHeader(SampleHeader);
   try
     E := TFpcEmitter.Create('sample', 'libsample');
     try
@@ -479,7 +479,7 @@ begin
   TmpH := GetTempFileName + '.h';
   WriteSnippet(TmpH, Snippet);
   try
-    U := ParseHeader(TmpH, []);
+    U := ParseHeader(TmpH);
     try
       E := TFpcEmitter.Create('vd', 'libvd');
       try
@@ -510,7 +510,7 @@ var
   RC: Integer;
 begin
   S := EmitSample;
-  TmpDir := GetTempDir(True);
+  TmpDir := GetTempDir;
   PasFile := IncludeTrailingPathDelimiter(TmpDir) + 'sample.pas';
   OutFile := IncludeTrailingPathDelimiter(TmpDir) + 'sample.out';
   WriteSnippet(PasFile, S);
@@ -556,7 +556,7 @@ var
   U: TBindingUnit;
   E: TBlaiseEmitter;
 begin
-  U := ParseHeader(SampleHeader, []);
+  U := ParseHeader(SampleHeader);
   try
     E := TBlaiseEmitter.Create('sample', 'libsample');
     try
@@ -642,7 +642,7 @@ begin
     Exit;
   end;
   S := EmitSample;
-  TmpDir := GetTempDir(True);
+  TmpDir := GetTempDir;
   PasFile := IncludeTrailingPathDelimiter(TmpDir) + 'sample.pas';
   OutFile := IncludeTrailingPathDelimiter(TmpDir) + 'sample.out';
   WriteSnippet(PasFile, S);
@@ -675,6 +675,7 @@ var
   TU: TClangTranslationUnit;
   Root: TClangCursor;
   Kids: TClangCursorArray;
+  K: TClangCursor;
   I: Integer;
 begin
   Result := nil;
@@ -694,7 +695,11 @@ begin
           end;
       finally
         for I := 0 to High(Kids) do
-          if Kids[I] <> nil then Kids[I].Free;
+        begin
+          { Stage through K — Blaise rejects arr[I].Method calls. }
+          K := Kids[I];
+          if K <> nil then K.Free;
+        end;
       end;
     finally
       Root.Free;

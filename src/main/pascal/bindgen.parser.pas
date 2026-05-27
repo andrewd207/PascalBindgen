@@ -28,7 +28,9 @@ uses
   because Blaise does not yet parse `class function` / `class
   procedure`. }
 function ParseHeader(const HeaderPath: string;
-                     const ExtraArgs: array of string): TBindingUnit;
+                     const ExtraArgs: array of string): TBindingUnit; overload;
+{ Convenience overload — Blaise rejects empty array literals at call sites. }
+function ParseHeader(const HeaderPath: string): TBindingUnit; overload;
 
 implementation
 
@@ -219,11 +221,12 @@ begin
   end;
 end;
 
-function ParseHeader(const HeaderPath: string;
-                                          const ExtraArgs: array of string): TBindingUnit;
+{ Internal: walk a parsed TU and populate the binding unit. Both
+  ParseHeader overloads route through here so the AST-walking logic
+  stays in one place. The TU is *owned* by this routine. }
+function ParseFromTU(TU: TClangTranslationUnit;
+                     const HeaderPath: string): TBindingUnit;
 var
-  Idx: TClangIndex;
-  TU: TClangTranslationUnit;
   Root: TClangCursor;
   Children: TClangCursorArray;
   Child: TClangCursor;
@@ -233,44 +236,63 @@ var
 begin
   Result := TBindingUnit.Create;
   Result.AddHeader(HeaderPath);
-  Idx := TClangIndex.Create(False, False);
   try
-    TU := Idx.Parse(HeaderPath, ExtraArgs);
+    Root := TU.RootCursor;
     try
-      Root := TU.RootCursor;
+      Children := CursorChildren(Root);
       try
-        Children := CursorChildren(Root);
-        try
-          for I := 0 to High(Children) do
-          begin
-            Child := Children[I];
-            if not Child.InMainFile then Continue;
-            K := Child.Kind;
-            Decl := nil;
-            if K = TClangKinds.FunctionDecl then
-              Decl := BuildFunction(Child)
-            else if K = TClangKinds.TypedefDecl then
-              Decl := BuildTypedef(Child)
-            else if K = TClangKinds.StructDecl then
-              Decl := BuildRecord(Child, False)
-            else if K = TClangKinds.UnionDecl then
-              Decl := BuildRecord(Child, True)
-            else if K = TClangKinds.EnumDecl then
-              Decl := BuildEnum(Child)
-            else
-              Continue;  { unhandled kind, skip for v1 }
-            Result.Decls.Add(Decl);
-          end;
-        finally
-          for I := 0 to High(Children) do begin
-            Child := Children[I]; Child.Free; end;
+        for I := 0 to High(Children) do
+        begin
+          Child := Children[I];
+          if not Child.InMainFile then Continue;
+          K := Child.Kind;
+          Decl := nil;
+          if K = TClangKinds.FunctionDecl then
+            Decl := BuildFunction(Child)
+          else if K = TClangKinds.TypedefDecl then
+            Decl := BuildTypedef(Child)
+          else if K = TClangKinds.StructDecl then
+            Decl := BuildRecord(Child, False)
+          else if K = TClangKinds.UnionDecl then
+            Decl := BuildRecord(Child, True)
+          else if K = TClangKinds.EnumDecl then
+            Decl := BuildEnum(Child)
+          else
+            Continue;
+          Result.Decls.Add(Decl);
         end;
       finally
-        Root.Free;
+        for I := 0 to High(Children) do begin
+          Child := Children[I]; Child.Free; end;
       end;
     finally
-      TU.Free;
+      Root.Free;
     end;
+  finally
+    TU.Free;
+  end;
+end;
+
+function ParseHeader(const HeaderPath: string;
+                     const ExtraArgs: array of string): TBindingUnit;
+var
+  Idx: TClangIndex;
+begin
+  Idx := TClangIndex.Create(False, False);
+  try
+    Result := ParseFromTU(Idx.Parse(HeaderPath, ExtraArgs), HeaderPath);
+  finally
+    Idx.Free;
+  end;
+end;
+
+function ParseHeader(const HeaderPath: string): TBindingUnit;
+var
+  Idx: TClangIndex;
+begin
+  Idx := TClangIndex.Create(False, False);
+  try
+    Result := ParseFromTU(Idx.ParseNoArgs(HeaderPath), HeaderPath);
   finally
     Idx.Free;
   end;

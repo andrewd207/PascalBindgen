@@ -45,7 +45,8 @@ linked in.
 | `class function` / `class procedure` | OK with `static;` qualifier           | Not yet parsed (`Expected 'end' in class definition`); use a plain unit-level function
 | `const` parameter qualifier          | Supported                             | Not supported — drop the keyword (caller still passes by value)
 | `FItems[N] := Item;` (writing to array-of-T class field) | OK | Semantic error "Undeclared variable 'FItems'" — see repro below
-| `array of const` (e.g. `Format('%d', [x])`, `Exception.CreateFmt`) | Supported via `TVarRec` | Not yet — `Semantic error: Array literal element N has type 'string'; expected 'Integer'`. Workaround: concat with `IntToStr`/`FloatToStr`.
+| `Format(fmt, [...])` (SysUtils) | Supported via `TVarRec` | **Supported** — handles mixed Integer/string args, e.g. `Format('rc=%d for "%s"', [rc, fn])` works.
+| `Exception.CreateFmt(fmt, [...])` | Supported | **Not** present — no `CreateFmt` constructor on `Exception`. Workaround: `raise E.Create(Format(fmt, [...]))`. The "Array literal element N has type 'string'; expected 'Integer'" error in this case is downstream of CreateFmt being absent, not Format itself failing.
 | `@OutOrVarParam` (taking address of a `var`/`out` parameter) | OK | `Code generation error: Unsupported L-value form for var argument`. Workaround: stage through a local, then assign back.
 | `@dynArr[0]` (address of dyn-array element)               | OK | Same codegen error. Workaround: `Pointer(arr)` gives the base pointer.
 | `P[i]` indexing of typed pointer (`PByte = ^Byte`)        | OK in mode delphi | `Semantic error: 'P' is not a static array or dynamic array` (or, with a cast, `String subscript '[]' requires a string expression`). The `type PByte = ^Byte` declaration itself parses, and typed-pointer arithmetic + deref works (`(P + i)^`); only `[]` dispatch on a pointer is missing.
