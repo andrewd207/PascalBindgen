@@ -661,7 +661,11 @@ begin
       v1 "compile, don't crash" measure. }
     for I := 0 to FOpaqueTypedefs.Count - 1 do
       if FDeclaredTypeNames.IndexOf(FOpaqueTypedefs[I]) < 0 then
-        Line(Format('  %s = record end;  { opaque — layout unknown }',
+        { Default to Pointer — overwhelmingly the right ABI size for
+          handle-like opaque types (Display *, EGLNativeDisplayType,
+          most platform handles). Wrong only for the rare opaque
+          struct-by-value typedefs like pthread_mutex_t. }
+        Line(Format('  %s = Pointer;  { opaque — layout unknown, assumed pointer-shaped }',
                     [EscapeIdent(FOpaqueTypedefs[I])]));
     { Synthesized 'P<X> = ^X' aliases emitted FIRST so any typedef
       with an inline procedural-type RHS referencing them resolves.

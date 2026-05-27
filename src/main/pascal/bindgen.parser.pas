@@ -458,7 +458,12 @@ begin
         for I := 0 to High(Children) do
         begin
           Child := Children[I];
-          if Child.InSystemHeader then Continue;
+          { Skip system-header decls (stddef/stdint guts, glibc
+            internals) unless the cursor is in the actual main file —
+            that lets headers living under /usr/include themselves
+            (EGL/egl.h, GL/gl.h, ...) be the target without losing
+            all their top-level decls. }
+          if Child.InSystemHeader and not Child.InMainFile then Continue;
           K := Child.Kind;
           Decl := nil;
           if K = TClangKinds.FunctionDecl then
