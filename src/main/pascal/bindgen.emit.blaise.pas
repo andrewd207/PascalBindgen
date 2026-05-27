@@ -1,6 +1,8 @@
 (* bindgen.emit.blaise — Blaise-dialect emitter.
 
-  Diverges from the FPC emitter in three ways:
+  Structurally mirrors bindgen.emit.fpc; the parser populates the
+  same IR and the same prepasses/aliasing rules apply. The four
+  surface differences:
 
   1. No `{$mode}` / `{$H+}` / `{$PACKRECORDS}` directives, no
      `uses ctypes` — Blaise does not ship those.
@@ -10,11 +12,15 @@
   3. `external` declarations carry only `name '...'`. No `cdecl`,
      no library directive — Blaise hasn't grown that syntax yet, so
      a `--library` value is recorded as a provenance comment instead.
+  4. Reserved-word collisions resolve to a `_` suffix rather than
+     FPC's `&` prefix (Blaise has no `&` escape).
 
-  Shares no code with the FPC emitter yet; mild duplication beats
-  premature abstraction while both emitters are still settling.
-  Pending v1 cuts mirror the FPC emitter (naming collisions, optional
-  TObject class-wrapping, bit-fields, function-pointer synthesis). *)
+  Pending v1 cuts:
+  * Union variant parts — Blaise has no `case Integer of`, so we
+    emit only the first alternative with the others as comments.
+  * Function-pointer typedef-as-procedural-type may still be too
+    rich for the current Blaise parser; the emitter falls back to
+    Pointer for inline use in parameter positions like FPC does. *)
 unit bindgen.emit.blaise;
 
 {$IFDEF FPC}
@@ -33,6 +39,14 @@ type
     FLibrary: string;
     FOutput: TStringList;
     FEmittedTypes: TStringList;
+    FDeclaredTypeNames: TStringList;
+    FPointerAliases: TStringList;
+    FOpaqueTypedefs: TStringList;
+    FNeedsVaList: Boolean;
+    { Blaise accepts inline `function(...): T` only at typedef RHS;
+      record fields and function params must reference a named alias
+      or fall back to Pointer. Flipped on inside EmitTypedef. }
+    FInTypedefBody: Boolean;
     procedure Line(const S: string = '');
     procedure EmitProvenance(U: TBindingUnit);
     procedure EmitDecl(D: TBindingDecl);
@@ -42,9 +56,14 @@ type
     procedure EmitTypedef(T: TBindingTypedef);
     procedure EmitMacro(M: TBindingMacroConst);
     function  MapType(T: TBindingType): string;
+    function  MapTypeForSig(T: TBindingType): string;
     function  MapPrimitive(const Spelling: string): string;
+    function  AliasPointer(const Raw: string): string;
     function  LocComment(const Loc: TSourceLoc): string;
+    function  EscapeIdent(const S: string): string;
     function  PascalizeComment(const Raw: string): string;
+    procedure CollectFunctionPointerAliases(U: TBindingUnit);
+    procedure WalkTypeForAliases(T: TBindingType);
   public
     constructor Create(const AUnitName, ALibrary: string);
     destructor Destroy; override;
@@ -52,6 +71,95 @@ type
   end;
 
 implementation
+
+{ Blaise reserved-word table. Conservative — overlap-heavy with
+  FPC's plus a few Blaise-specific words. Names matching this list
+  get a '_' suffix when emitted; Blaise has no '&Ident' escape. }
+const
+  BLAISE_RESERVED: array[0..71] of string = (
+    'absolute','and','array','as','asm','begin','case','class',
+    'const','constructor','destructor','div','do','downto','else',
+    'end','except','exports','external','file','finalization','finally',
+    'for','function','goto','if','implementation','in','inherited',
+    'initialization','inline','interface','is','label','library','mod',
+    'nil','not','object','of','on','operator','or','out','packed',
+    'procedure','program','property','raise','record','repeat',
+    'resourcestring','set','shl','shr','string','then',
+    'threadvar','to','try','type','unit','until','uses','var',
+    'while','with','xor',
+    { Blaise built-ins that aren't keywords but collide as identifiers }
+    'integer','boolean','pointer','pchar'
+  );
+
+constructor TBlaiseEmitter.Create(const AUnitName, ALibrary: string);
+begin
+  inherited Create;
+  FUnitName := AUnitName;
+  FLibrary := ALibrary;
+  FOutput := TStringList.Create;
+  FEmittedTypes := TStringList.Create;
+  FEmittedTypes.Sorted := True;
+  FEmittedTypes.Duplicates := dupIgnore;
+  FDeclaredTypeNames := TStringList.Create;
+  FDeclaredTypeNames.Sorted := True;
+  FDeclaredTypeNames.Duplicates := dupIgnore;
+  FPointerAliases := TStringList.Create;
+  FPointerAliases.Sorted := True;
+  FPointerAliases.Duplicates := dupIgnore;
+  FOpaqueTypedefs := TStringList.Create;
+  FOpaqueTypedefs.Sorted := True;
+  FOpaqueTypedefs.Duplicates := dupIgnore;
+end;
+
+destructor TBlaiseEmitter.Destroy;
+begin
+  FOutput.Free;
+  FEmittedTypes.Free;
+  FDeclaredTypeNames.Free;
+  FPointerAliases.Free;
+  FOpaqueTypedefs.Free;
+  inherited Destroy;
+end;
+
+{ Blaise built-in or RTL-provided identifiers. Used to suppress
+  forward-record stubs that would shadow them, and to prevent
+  spurious 'Foo = record end' next to a 'PFoo = ^Foo' pointer alias
+  when 'Foo' is already a primitive. Case-insensitive. }
+function IsBlaiseBuiltin(const S: string): Boolean;
+var
+  L: string;
+begin
+  L := LowerCase(S);
+  Result := (L = 'pointer') or (L = 'pchar') or (L = 'pbyte')
+         or (L = 'va_list') or (L = '__va_list_tag')
+         or (L = 'byte') or (L = 'word') or (L = 'smallint')
+         or (L = 'integer') or (L = 'cardinal')
+         or (L = 'int64') or (L = 'uint64')
+         or (L = 'uint16') or (L = 'uint32')
+         or (L = 'single') or (L = 'double')
+         or (L = 'boolean') or (L = 'string');
+end;
+
+function TBlaiseEmitter.EscapeIdent(const S: string): string;
+var
+  I: Integer;
+  Lower: string;
+begin
+  if S = '' then begin Result := S; Exit; end;
+  Lower := LowerCase(S);
+  for I := Low(BLAISE_RESERVED) to High(BLAISE_RESERVED) do
+    if Lower = BLAISE_RESERVED[I] then
+    begin
+      Result := S + '_';
+      Exit;
+    end;
+  Result := S;
+end;
+
+procedure TBlaiseEmitter.Line(const S: string);
+begin
+  FOutput.Add(S);
+end;
 
 function TBlaiseEmitter.PascalizeComment(const Raw: string): string;
 var
@@ -65,29 +173,6 @@ begin
   Result := '(* ' + S + ' *)';
 end;
 
-constructor TBlaiseEmitter.Create(const AUnitName, ALibrary: string);
-begin
-  inherited Create;
-  FUnitName := AUnitName;
-  FLibrary := ALibrary;
-  FOutput := TStringList.Create;
-  FEmittedTypes := TStringList.Create;
-  FEmittedTypes.Sorted := True;
-  FEmittedTypes.Duplicates := dupIgnore;
-end;
-
-destructor TBlaiseEmitter.Destroy;
-begin
-  FOutput.Free;
-  FEmittedTypes.Free;
-  inherited Destroy;
-end;
-
-procedure TBlaiseEmitter.Line(const S: string);
-begin
-  FOutput.Add(S);
-end;
-
 function TBlaiseEmitter.LocComment(const Loc: TSourceLoc): string;
 begin
   if Loc.FileName = '' then
@@ -97,9 +182,7 @@ begin
 end;
 
 { C primitive → Blaise built-in type. Width choices target the Blaise
-  Linux x86_64 platform (where `long` is 64-bit); when Blaise grows
-  cross-target support the mapping for `long`/`unsigned long` may need
-  to depend on the target triple. }
+  Linux x86_64 platform (where `long` is 64-bit). }
 function TBlaiseEmitter.MapPrimitive(const Spelling: string): string;
 var
   S: string;
@@ -108,11 +191,21 @@ begin
   if Copy(S, 1, 6) = 'const ' then S := Trim(Copy(S, 7, MaxInt));
   if Copy(S, 1, 9) = 'volatile ' then S := Trim(Copy(S, 10, MaxInt));
   if Copy(S, 1, 6) = 'const ' then S := Trim(Copy(S, 7, MaxInt));
+  if Copy(S, 1, 7) = 'struct ' then S := Trim(Copy(S, 8, MaxInt))
+  else if Copy(S, 1, 6) = 'union '  then S := Trim(Copy(S, 7, MaxInt))
+  else if Copy(S, 1, 5) = 'enum '   then S := Trim(Copy(S, 6, MaxInt));
+  { Reject any spelling that no Pascal compiler will accept. }
+  if (Pos('(', S) > 0) or (Pos('__attribute', S) > 0)
+     or (Pos('__vector', S) > 0) then
+  begin
+    Result := 'Pointer';
+    Exit;
+  end;
   if      S = 'void'                  then Result := ''
   else if S = 'bool'                  then Result := 'Boolean'
   else if S = '_Bool'                 then Result := 'Boolean'
-  else if S = 'char'                  then Result := 'AnsiChar'
-  else if S = 'signed char'           then Result := 'ShortInt'
+  else if S = 'char'                  then Result := 'Byte'  { Blaise has no Char type; use Byte for sub-PChar use }
+  else if S = 'signed char'           then Result := 'Byte'  { Blaise has no signed 8-bit type; signedness lost }
   else if S = 'unsigned char'         then Result := 'Byte'
   else if S = 'short'                 then Result := 'SmallInt'
   else if S = 'unsigned short'        then Result := 'Word'
@@ -129,12 +222,138 @@ begin
   else Result := S;
 end;
 
+{ '^X' becomes 'PX' (with 'PX = ^X' registered); '^^X' becomes 'PPX'
+  (registering both layers). Blaise rejects '^X' in parameter and
+  return-type positions, so we route signatures through here. }
+function TBlaiseEmitter.AliasPointer(const Raw: string): string;
+var
+  Pointee, InnerAlias: string;
+begin
+  if (Length(Raw) >= 2) and (Raw[1] = '^') then
+  begin
+    Pointee := Copy(Raw, 2, MaxInt);
+    if (Length(Pointee) >= 1) and (Pointee[1] = '^') then
+    begin
+      InnerAlias := AliasPointer(Pointee);
+      Result := 'P' + InnerAlias;
+      FPointerAliases.Add(InnerAlias);
+    end
+    else
+    begin
+      Result := 'P' + Pointee;
+      FPointerAliases.Add(Pointee);
+    end;
+  end
+  else
+    Result := Raw;
+end;
+
+function TBlaiseEmitter.MapTypeForSig(T: TBindingType): string;
+begin
+  { Inline function pointers are too rich for the Blaise parser
+    in a parameter position; typedef'd ones come through as
+    tkTypedefRef and stay readable. }
+  if (T <> nil) and (T.Kind = tkFunctionPointer) then
+  begin
+    Result := 'Pointer';
+    Exit;
+  end;
+  { C array parameter decays to a pointer at the ABI level. }
+  if (T <> nil) and (T.Kind = tkArray) and (T.Pointee <> nil) then
+  begin
+    Result := AliasPointer('^' + MapType(T.Pointee));
+    Exit;
+  end;
+  Result := AliasPointer(MapType(T));
+end;
+
+procedure TBlaiseEmitter.WalkTypeForAliases(T: TBindingType);
+var
+  J: Integer;
+  Discard, RefName: string;
+begin
+  if T = nil then Exit;
+  Discard := AliasPointer(MapType(T));
+  if Discard = '' then ;
+  if T.Kind = tkTypedefRef then
+  begin
+    RefName := T.Spelling;
+    if Copy(RefName, 1, 7) = 'struct ' then Delete(RefName, 1, 7)
+    else if Copy(RefName, 1, 6) = 'union '  then Delete(RefName, 1, 6)
+    else if Copy(RefName, 1, 5) = 'enum '   then Delete(RefName, 1, 5);
+    if Copy(RefName, 1, 6) = 'const '   then Delete(RefName, 1, 6);
+    if (FDeclaredTypeNames.IndexOf(RefName) < 0)
+       and (T.CanonicalSpelling = '')
+       and (RefName <> '')
+       and (Pos('(', RefName) = 0)
+       and (Pos(')', RefName) = 0)
+       and (Pos(',', RefName) = 0)
+       and (Pos(' ', RefName) = 0)
+       and (Pos('*', RefName) = 0)
+       and (Pos('__va_list_tag', RefName) = 0)
+       and (RefName <> 'va_list')
+       and (Copy(RefName, 1, 2) <> '__') then
+      FOpaqueTypedefs.Add(RefName);
+  end;
+  if T.Pointee <> nil then WalkTypeForAliases(T.Pointee);
+  if T.FuncReturn <> nil then WalkTypeForAliases(T.FuncReturn);
+  if T.FuncParams <> nil then
+    for J := 0 to T.FuncParams.Count - 1 do
+      WalkTypeForAliases(T.FuncParams.Items[J]);
+end;
+
+procedure TBlaiseEmitter.CollectFunctionPointerAliases(U: TBindingUnit);
+var
+  I, J: Integer;
+  D: TBindingDecl;
+  F: TBindingFunction;
+  R: TBindingRecord;
+  Td: TBindingTypedef;
+begin
+  FPointerAliases.Clear;
+  FOpaqueTypedefs.Clear;
+  FNeedsVaList := False;
+  for I := 0 to U.Decls.Count - 1 do
+  begin
+    D := U.Decls.Items[I];
+    if D is TBindingFunction then
+    begin
+      F := TBindingFunction(D);
+      WalkTypeForAliases(F.ReturnType);
+      for J := 0 to F.Params.Count - 1 do
+        WalkTypeForAliases(F.Params.Items[J].ParamType);
+    end
+    else if D is TBindingRecord then
+    begin
+      R := TBindingRecord(D);
+      for J := 0 to R.Fields.Count - 1 do
+        WalkTypeForAliases(R.Fields.Items[J].FieldType);
+    end
+    else if D is TBindingTypedef then
+    begin
+      Td := TBindingTypedef(D);
+      WalkTypeForAliases(Td.Aliased);
+    end;
+  end;
+end;
+
 function TBlaiseEmitter.MapType(T: TBindingType): string;
 var
-  Inner, Params, Ret: string;
+  Inner: string;
   J: Integer;
+  Params, Ret: string;
 begin
   if T = nil then begin Result := 'Pointer'; Exit; end;
+  { Pathological libclang spellings → Pointer-sized blob. }
+  if (Pos('(unnamed ', T.Spelling) > 0)
+     or (Pos('(anonymous ', T.Spelling) > 0)
+     or (Pos('__va_list_tag', T.Spelling) > 0)
+     or (Pos('__builtin_va_list', T.Spelling) > 0)
+     or (Pos('__attribute__', T.Spelling) > 0) then
+  begin
+    Result := 'Pointer';
+    Exit;
+  end;
   case T.Kind of
     tkPointer:
       begin
@@ -142,13 +361,22 @@ begin
           Result := 'Pointer'
         else if T.Pointee.Kind = tkFunctionPointer then
           Result := 'Pointer'
+        else if T.Pointee.Kind = tkPointer then
+          Result := AliasPointer('^' + MapType(T.Pointee))
         else
         begin
           Inner := MapType(T.Pointee);
-          if Inner = 'AnsiChar' then
-            Result := 'PChar'  { Blaise spelling }
+          { C `char *` → Blaise `PChar`. Blaise lacks Char/AnsiChar
+            as standalone types, so plain `char` maps to Byte above,
+            but `^char` collapses to PChar (Blaise's NUL-terminated
+            string handle). }
+          if (Inner = 'Byte') and (T.Pointee <> nil)
+             and (T.Pointee.Kind = tkPrimitive)
+             and ((Trim(T.Pointee.Spelling) = 'char')
+                  or (Trim(T.Pointee.Spelling) = 'const char')) then
+            Result := 'PChar'
           else if Inner = '' then
-            Result := 'Pointer'
+            Result := 'Pointer'  { void* }
           else
             Result := '^' + Inner;
         end;
@@ -170,25 +398,51 @@ begin
         if      Copy(Inner, 1, 7) = 'struct '  then Delete(Inner, 1, 7)
         else if Copy(Inner, 1, 6) = 'union '   then Delete(Inner, 1, 6)
         else if Copy(Inner, 1, 5) = 'enum '    then Delete(Inner, 1, 5);
-        Result := Inner;
+        if (T.Kind = tkTypedefRef)
+           and (FDeclaredTypeNames.IndexOf(Inner) < 0)
+           and (T.CanonicalSpelling <> '') then
+        begin
+          if Copy(T.CanonicalSpelling, 1, 5) = 'enum ' then
+            Result := 'Cardinal'   { C enum default width, Blaise spelling }
+          else
+            Result := MapPrimitive(T.CanonicalSpelling);
+        end
+        else if (T.Kind = tkEnumRef)
+                and (FDeclaredTypeNames.IndexOf(Inner) < 0) then
+          Result := 'Cardinal'
+        else
+          Result := Inner;
       end;
     tkFunctionPointer:
       begin
+        if not FInTypedefBody then
+        begin
+          { Blaise won't parse inline procedural types in record /
+            field / parameter positions. Collapse to Pointer; the
+            typed form survives at typedef RHS via FInTypedefBody. }
+          Result := 'Pointer';
+          Exit;
+        end;
         Params := '';
         if T.FuncParams <> nil then
           for J := 0 to T.FuncParams.Count - 1 do
           begin
             if Params <> '' then Params := Params + '; ';
             Params := Params + Format('arg%d: %s',
-              [J + 1, MapType(T.FuncParams.Items[J])]);
+              [J + 1, MapTypeForSig(T.FuncParams.Items[J])]);
           end;
         if Params <> '' then Params := '(' + Params + ')';
         if T.FuncReturn = nil then Ret := ''
-        else Ret := MapType(T.FuncReturn);
+        else Ret := MapTypeForSig(T.FuncReturn);
         if Ret = '' then
           Result := Format('procedure%s', [Params])
         else
           Result := Format('function%s: %s', [Params, Ret]);
+      end;
+    tkVaList:
+      begin
+        FNeedsVaList := True;
+        Result := 'va_list';
       end;
     tkPrimitive:
       Result := MapPrimitive(T.Spelling);
@@ -228,23 +482,24 @@ begin
     if Params <> '' then Params := Params + '; ';
     ParamName := P.Name;
     if ParamName = '' then ParamName := Format('arg%d', [I + 1]);
+    ParamName := EscapeIdent(ParamName);
     if P.IsConst then
-      Params := Params + 'const ' + ParamName + ': ' + MapType(P.ParamType)
+      Params := Params + 'const ' + ParamName + ': ' + MapTypeForSig(P.ParamType)
     else
-      Params := Params + ParamName + ': ' + MapType(P.ParamType);
+      Params := Params + ParamName + ': ' + MapTypeForSig(P.ParamType);
   end;
   if Params <> '' then Params := '(' + Params + ')';
 
-  RetType := MapType(F.ReturnType);
+  RetType := MapTypeForSig(F.ReturnType);
   Modifiers := Format('external name ''%s''', [F.Name]);
   if F.IsVarArgs then
     Modifiers := Modifiers +
       '  { varargs — Blaise has no varargs syntax yet, call via wrapper }';
 
   if RetType = '' then
-    Sig := Format('procedure %s%s; %s;', [F.Name, Params, Modifiers])
+    Sig := Format('procedure %s%s; %s;', [EscapeIdent(F.Name), Params, Modifiers])
   else
-    Sig := Format('function %s%s: %s; %s;', [F.Name, Params, RetType, Modifiers]);
+    Sig := Format('function %s%s: %s; %s;', [EscapeIdent(F.Name), Params, RetType, Modifiers]);
 
   Line(Sig + LocComment(F.Location));
 end;
@@ -257,16 +512,14 @@ begin
   if R.RawComment <> '' then Line(PascalizeComment(R.RawComment));
   if R.IsUnion then
   begin
-    { Blaise has no variant-part records. For v1 we represent a union
-      as a record holding only its first alternative — enough to pass
-      through FFI by reference, but the other alternatives need a
-      hand-written reinterpret cast. Surfaced via a loss comment. }
+    { Blaise has no variant-part records. Emit the first alternative
+      as the active field; surface the rest as comments. }
     Line(Format('  %s = record  { union — using first alternative; size may differ from C } %s',
-                [R.Name, LocComment(R.Location)]));
+                [EscapeIdent(R.Name), LocComment(R.Location)]));
     if R.Fields.Count > 0 then
     begin
       F := R.Fields.Items[0];
-      Line(Format('    %s: %s;', [F.Name, MapType(F.FieldType)]));
+      Line(Format('    %s: %s;', [EscapeIdent(F.Name), MapType(F.FieldType)]));
       for I := 1 to R.Fields.Count - 1 do
         Line(Format('    { alt %d: %s: %s }',
              [I, R.Fields.Items[I].Name, MapType(R.Fields.Items[I].FieldType)]));
@@ -275,15 +528,15 @@ begin
   end
   else
   begin
-    Line(Format('  %s = record%s', [R.Name, LocComment(R.Location)]));
+    Line(Format('  %s = record%s', [EscapeIdent(R.Name), LocComment(R.Location)]));
     for I := 0 to R.Fields.Count - 1 do
     begin
       F := R.Fields.Items[I];
       if F.BitWidth >= 0 then
         Line(Format('    %s: %s;  { bit-field: width=%d, best-effort }',
-                    [F.Name, MapType(F.FieldType), F.BitWidth]))
+                    [EscapeIdent(F.Name), MapType(F.FieldType), F.BitWidth]))
       else
-        Line(Format('    %s: %s;', [F.Name, MapType(F.FieldType)]));
+        Line(Format('    %s: %s;', [EscapeIdent(F.Name), MapType(F.FieldType)]));
     end;
     Line('  end;');
   end;
@@ -291,9 +544,7 @@ end;
 
 procedure TBlaiseEmitter.EmitEnum(E: TBindingEnum);
 var
-  I: Integer;
   Underlying: string;
-  C: TBindingEnumConst;
 begin
   if E.RawComment <> '' then Line(PascalizeComment(E.RawComment));
   if E.UnderlyingType <> nil then
@@ -301,17 +552,10 @@ begin
   else
     Underlying := 'Integer';
   if Underlying = '' then Underlying := 'Integer';
-  Line(Format('  %s = %s;%s', [E.Name, Underlying, LocComment(E.Location)]));
-  if E.Constants.Count > 0 then
-  begin
-    Line('const');
-    for I := 0 to E.Constants.Count - 1 do
-    begin
-      C := E.Constants.Items[I];
-      Line(Format('  %s = %d;', [C.Name, C.Value]));
-    end;
-    Line('type');
-  end;
+  Line(Format('  %s = %s;%s', [EscapeIdent(E.Name), Underlying, LocComment(E.Location)]));
+  { Constants are batched into a single const block emitted after
+    the entire type section closes — keeps forward type refs
+    resolvable across the section. }
 end;
 
 procedure TBlaiseEmitter.EmitTypedef(T: TBindingTypedef);
@@ -319,16 +563,23 @@ var
   Aliased: string;
 begin
   if T.RawComment <> '' then Line(PascalizeComment(T.RawComment));
-  Aliased := MapType(T.Aliased);
+  FInTypedefBody := True;
+  try
+    Aliased := MapType(T.Aliased);
+  finally
+    FInTypedefBody := False;
+  end;
   if Aliased = '' then Aliased := 'Pointer';
-  if Aliased = T.Name then Exit;
-  Line(Format('  %s = %s;%s', [T.Name, Aliased, LocComment(T.Location)]));
+  { Vacuous self-typedef ('typedef struct X X;') — skip. Pascal is
+    case-insensitive, so compare lowered. }
+  if LowerCase(Aliased) = LowerCase(T.Name) then Exit;
+  Line(Format('  %s = %s;%s', [EscapeIdent(T.Name), Aliased, LocComment(T.Location)]));
 end;
 
 procedure TBlaiseEmitter.EmitMacro(M: TBindingMacroConst);
 begin
   if M.RawComment <> '' then Line(PascalizeComment(M.RawComment));
-  Line(Format('  %s = %s;%s', [M.Name, M.RawValue, LocComment(M.Location)]));
+  Line(Format('  %s = %s;%s', [EscapeIdent(M.Name), M.RawValue, LocComment(M.Location)]));
 end;
 
 procedure TBlaiseEmitter.EmitDecl(D: TBindingDecl);
@@ -338,6 +589,11 @@ begin
     EmitFunction(TBindingFunction(D));
     Exit;
   end;
+  { Vacuous self-typedef — don't claim the name in FEmittedTypes so
+    a later StructDecl can still emit. }
+  if (D is TBindingTypedef)
+     and (LowerCase(MapType(TBindingTypedef(D).Aliased)) = LowerCase(D.Name)) then
+    Exit;
   if FEmittedTypes.IndexOf(D.Name) >= 0 then Exit;
   FEmittedTypes.Add(D.Name);
   if      D is TBindingRecord  then EmitRecord(TBindingRecord(D))
@@ -347,12 +603,25 @@ end;
 
 function TBlaiseEmitter.Emit(U: TBindingUnit): string;
 var
-  I: Integer;
+  I, J: Integer;
   D: TBindingDecl;
   HasTypes, HasFuncs, HasMacros: Boolean;
+  EC: TBindingEnumConst;
 begin
   FOutput.Clear;
   FEmittedTypes.Clear;
+  FDeclaredTypeNames.Clear;
+  for I := 0 to U.Decls.Count - 1 do
+  begin
+    D := U.Decls.Items[I];
+    if D is TBindingFunction then Continue;
+    if D is TBindingMacroConst then Continue;
+    if (D is TBindingTypedef)
+       and (LowerCase(MapType(TBindingTypedef(D).Aliased)) = LowerCase(D.Name)) then
+      Continue;
+    FDeclaredTypeNames.Add(D.Name);
+  end;
+  CollectFunctionPointerAliases(U);
   EmitProvenance(U);
   Line;
   Line(Format('unit %s;', [FUnitName]));
@@ -370,10 +639,68 @@ begin
     else if D is TBindingMacroConst then HasMacros := True
     else HasTypes := True;
   end;
+  if HasMacros then ;  { used below — silence stale-var warning }
 
-  if HasTypes then
+  if HasTypes or (FPointerAliases.Count > 0) or (FOpaqueTypedefs.Count > 0)
+     or FNeedsVaList then
   begin
     Line('type');
+    { Platform-aware va_list. Blaise currently targets only Linux
+      x86_64, so the SysV layout is what we emit. }
+    if FNeedsVaList then
+    begin
+      FEmittedTypes.Add('va_list');
+      FEmittedTypes.Add('__va_list_tag');
+      Line('  __va_list_tag = record');
+      Line('    gp_offset: Cardinal;');
+      Line('    fp_offset: Cardinal;');
+      Line('    overflow_arg_area: Pointer;');
+      Line('    reg_save_area: Pointer;');
+      Line('  end;');
+      Line('  va_list = array[0..0] of __va_list_tag;');
+    end;
+    { Opaque stubs for typedef-ref names that reference system-header
+      types we never declared. }
+    for I := 0 to FOpaqueTypedefs.Count - 1 do
+      if FDeclaredTypeNames.IndexOf(FOpaqueTypedefs[I]) < 0 then
+        Line(Format('  %s = Pointer;  { opaque — layout unknown, assumed pointer-shaped }',
+                    [EscapeIdent(FOpaqueTypedefs[I])]));
+    { Synthesized 'P<X> = ^X' aliases — emit forward-record stubs for
+      pointee names we don't otherwise declare. }
+    if FPointerAliases.Count > 0 then
+    begin
+      for I := 0 to FPointerAliases.Count - 1 do
+      begin
+        if FDeclaredTypeNames.IndexOf(FPointerAliases[I]) >= 0 then Continue;
+        if FOpaqueTypedefs.IndexOf(FPointerAliases[I]) >= 0 then Continue;
+        if IsBlaiseBuiltin(FPointerAliases[I]) then Continue;
+        if (Length(FPointerAliases[I]) >= 2)
+           and (FPointerAliases[I][1] = 'P')
+           and (FPointerAliases.IndexOf(Copy(FPointerAliases[I], 2, MaxInt)) >= 0)
+           then Continue;
+        if (Pos('(', FPointerAliases[I]) > 0)
+           or (Pos(')', FPointerAliases[I]) > 0)
+           or (Pos(',', FPointerAliases[I]) > 0)
+           or (Pos(' ', FPointerAliases[I]) > 0)
+           or (Pos('*', FPointerAliases[I]) > 0)
+           or (Pos('__va_list_tag', FPointerAliases[I]) > 0)
+           or (Copy(FPointerAliases[I], 1, 2) = '__') then Continue;
+        Line(Format('  %s = record end;', [EscapeIdent(FPointerAliases[I])]));
+      end;
+      for I := 0 to FPointerAliases.Count - 1 do
+      begin
+        if (Pos('(', FPointerAliases[I]) > 0)
+           or (Pos(')', FPointerAliases[I]) > 0)
+           or (Pos(',', FPointerAliases[I]) > 0)
+           or (Pos(' ', FPointerAliases[I]) > 0)
+           or (Pos('*', FPointerAliases[I]) > 0)
+           or (Pos('__va_list_tag', FPointerAliases[I]) > 0) then Continue;
+        if FDeclaredTypeNames.IndexOf('P' + FPointerAliases[I]) >= 0 then
+          Continue;
+        Line(Format('  P%s = ^%s;',
+                    [FPointerAliases[I], EscapeIdent(FPointerAliases[I])]));
+      end;
+    end;
     for I := 0 to U.Decls.Count - 1 do
     begin
       D := U.Decls.Items[I];
@@ -384,14 +711,41 @@ begin
     Line;
   end;
 
+  { #define integer constants + enum constants share a single
+    const block at the end of the type section so the type section
+    stays unbroken (forward 'PX' refs would otherwise fail to
+    resolve across an intervening const section). }
+  HasMacros := False;
+  for I := 0 to U.Decls.Count - 1 do
+  begin
+    D := U.Decls.Items[I];
+    if D is TBindingMacroConst then begin HasMacros := True; Break; end;
+    if (D is TBindingEnum) and (TBindingEnum(D).Constants.Count > 0) then
+    begin HasMacros := True; Break; end;
+  end;
   if HasMacros then
   begin
     Line('const');
+    { Case-insensitive dedup — Pascal-side identifiers collide
+      under case folding (GDK_KEY_a vs GDK_KEY_A and similar). }
+    FEmittedTypes.Clear;
     for I := 0 to U.Decls.Count - 1 do
     begin
       D := U.Decls.Items[I];
       if D is TBindingMacroConst then
+      begin
+        if FEmittedTypes.IndexOf(LowerCase(D.Name)) >= 0 then Continue;
+        FEmittedTypes.Add(LowerCase(D.Name));
         EmitMacro(TBindingMacroConst(D));
+      end
+      else if D is TBindingEnum then
+        for J := 0 to TBindingEnum(D).Constants.Count - 1 do
+        begin
+          EC := TBindingEnum(D).Constants.Items[J];
+          if FEmittedTypes.IndexOf(LowerCase(EC.Name)) >= 0 then Continue;
+          FEmittedTypes.Add(LowerCase(EC.Name));
+          Line(Format('  %s = %d;', [EscapeIdent(EC.Name), EC.Value]));
+        end;
     end;
     Line;
   end;
