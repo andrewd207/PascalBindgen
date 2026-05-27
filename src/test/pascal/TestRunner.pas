@@ -85,6 +85,7 @@ type
     procedure TypedefMyIntAliasesInt;
     procedure UserIncludeDeclsAreEmittedSystemHeadersAreNot;
     procedure ForwardDeclThenDefinitionEmitsOnce;
+    procedure ReservedWordIdentsAreEscapedAndEmittedSourceCompiles;
   end;
 
   TFpcEmitTests = class(TTestCase)
@@ -485,6 +486,69 @@ begin
     Inc(P);
   end;
   AssertEquals('exactly one OpaqueThing record declaration', 1, Count);
+end;
+
+procedure TParserTests.ReservedWordIdentsAreEscapedAndEmittedSourceCompiles;
+{ Parameter and field names that collide with Pascal reserved words
+  ('file', 'type', 'in', 'out', 'begin', 'end', ...) must be
+  emitted with the '&' escape so the unit still parses under FPC. }
+const
+  Candidates: array[0..3] of string = (
+    'sample_reserved.h',
+    'src/test/resources/sample_reserved.h',
+    '../src/test/resources/sample_reserved.h',
+    '../../src/test/resources/sample_reserved.h'
+  );
+var
+  Hdr, Src: string;
+  I, RC: Integer;
+  U: TBindingUnit;
+  E: TFpcEmitter;
+  TmpDir, PasFile, OutFile, Cmd: string;
+begin
+  Hdr := Candidates[0];
+  for I := Low(Candidates) to High(Candidates) do
+    if FileExists(Candidates[I]) then begin Hdr := Candidates[I]; Break; end;
+
+  U := ParseHeader(Hdr);
+  try
+    E := TFpcEmitter.Create('reserved', 'libreserved');
+    try
+      Src := E.Emit(U);
+    finally
+      E.Free;
+    end;
+  finally
+    U.Free;
+  end;
+
+  { Spot-check a couple of escapes landed. }
+  AssertTrue('&file param present', Pos('&file:', Src) > 0);
+  AssertTrue('&type param present', Pos('&type:', Src) > 0);
+  AssertTrue('&begin field present', Pos('&begin:', Src) > 0);
+  AssertTrue('&in param present',   Pos('&in:', Src) > 0);
+
+  { And compile the whole thing under fpc -Cn — if a collision still
+    snuck through, this is what catches it. }
+  TmpDir := GetTempDir(True);
+  PasFile := IncludeTrailingPathDelimiter(TmpDir) + 'reserved.pas';
+  OutFile := IncludeTrailingPathDelimiter(TmpDir) + 'reserved.out';
+  WriteSnippet(PasFile, Src);
+  try
+    Cmd := Format('fpc -Cn -O- %s > %s 2>&1', [PasFile, OutFile]);
+    RC := RunShell(Cmd);
+    if RC <> 0 then
+    begin
+      WriteLn('--- fpc output ---');
+      WriteLn(ReadAllText(OutFile));
+      WriteLn('--- emitted source ---');
+      WriteLn(Src);
+    end;
+    AssertEquals('emitted reserved-words source parses', 0, RC);
+  finally
+    DeleteFile(PasFile);
+    DeleteFile(OutFile);
+  end;
 end;
 
 { TFpcEmitTests }

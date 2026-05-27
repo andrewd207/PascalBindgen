@@ -51,6 +51,7 @@ type
     procedure EmitTypedef(T: TBindingTypedef);
     function  MapType(T: TBindingType): string;
     function  LocComment(const Loc: TSourceLoc): string;
+    function  EscapeIdent(const S: string): string;
   public
     constructor Create(const AUnitName, ALibrary: string);
     destructor Destroy; override;
@@ -68,6 +69,41 @@ begin
   FEmittedTypes := TStringList.Create;
   FEmittedTypes.Sorted := True;
   FEmittedTypes.Duplicates := dupIgnore;
+end;
+
+{ FPC reserved-word table (objfpc + delphi modes). Identifiers
+  coming from the C source that collide get prefixed with '&', the
+  FPC escape that yields a legal identifier with the same surface
+  spelling. Lowercased before comparison since Pascal is
+  case-insensitive but the table only stores the canonical form. }
+const
+  FPC_RESERVED: array[0..67] of string = (
+    'absolute','and','array','as','asm','begin','case','class',
+    'const','constructor','destructor','div','do','downto','else',
+    'end','except','exports','external','file','finalization','finally',
+    'for','function','goto','if','implementation','in','inherited',
+    'initialization','inline','interface','is','label','library','mod',
+    'nil','not','object','of','on','operator','or','out','packed',
+    'procedure','program','property','raise','record','repeat',
+    'resourcestring','set','shl','shr','string','then',
+    'threadvar','to','try','type','unit','until','uses','var',
+    'while','with','xor'
+  );
+
+function TFpcEmitter.EscapeIdent(const S: string): string;
+var
+  I: Integer;
+  Lower: string;
+begin
+  if S = '' then begin Result := S; Exit; end;
+  Lower := LowerCase(S);
+  for I := Low(FPC_RESERVED) to High(FPC_RESERVED) do
+    if Lower = FPC_RESERVED[I] then
+    begin
+      Result := '&' + S;
+      Exit;
+    end;
+  Result := S;
 end;
 
 destructor TFpcEmitter.Destroy;
@@ -210,6 +246,7 @@ begin
     if Params <> '' then Params := Params + '; ';
     ParamName := P.Name;
     if ParamName = '' then ParamName := Format('arg%d', [I + 1]);
+    ParamName := EscapeIdent(ParamName);
     if P.IsConst then
       Params := Params + 'const ' + ParamName + ': ' + MapType(P.ParamType)
     else
@@ -227,9 +264,9 @@ begin
     Modifiers := Modifiers + Format('; external name ''%s''', [F.Name]);
 
   if RetType = '' then
-    Sig := Format('procedure %s%s; %s;', [F.Name, Params, Modifiers])
+    Sig := Format('procedure %s%s; %s;', [EscapeIdent(F.Name), Params, Modifiers])
   else
-    Sig := Format('function %s%s: %s; %s;', [F.Name, Params, RetType, Modifiers]);
+    Sig := Format('function %s%s: %s; %s;', [EscapeIdent(F.Name), Params, RetType, Modifiers]);
 
   Line(Sig + LocComment(F.Location));
 end;
@@ -242,26 +279,26 @@ begin
   if R.RawComment <> '' then Line(PascalizeComment(R.RawComment));
   if R.IsUnion then
   begin
-    Line(Format('  %s = record  { union } %s', [R.Name, LocComment(R.Location)]));
+    Line(Format('  %s = record  { union } %s', [EscapeIdent(R.Name), LocComment(R.Location)]));
     Line('    case Integer of');
     for I := 0 to R.Fields.Count - 1 do
     begin
       F := R.Fields.Items[I];
-      Line(Format('      %d: (%s: %s);', [I, F.Name, MapType(F.FieldType)]));
+      Line(Format('      %d: (%s: %s);', [I, EscapeIdent(F.Name), MapType(F.FieldType)]));
     end;
     Line('  end;');
   end
   else
   begin
-    Line(Format('  %s = record%s', [R.Name, LocComment(R.Location)]));
+    Line(Format('  %s = record%s', [EscapeIdent(R.Name), LocComment(R.Location)]));
     for I := 0 to R.Fields.Count - 1 do
     begin
       F := R.Fields.Items[I];
       if F.BitWidth >= 0 then
         Line(Format('    %s: %s;  { bit-field: width=%d, best-effort }',
-                    [F.Name, MapType(F.FieldType), F.BitWidth]))
+                    [EscapeIdent(F.Name), MapType(F.FieldType), F.BitWidth]))
       else
-        Line(Format('    %s: %s;', [F.Name, MapType(F.FieldType)]));
+        Line(Format('    %s: %s;', [EscapeIdent(F.Name), MapType(F.FieldType)]));
     end;
     Line('  end;');
   end;
@@ -279,14 +316,14 @@ begin
   else
     Underlying := 'cint';
   if Underlying = '' then Underlying := 'cint';
-  Line(Format('  %s = %s;%s', [E.Name, Underlying, LocComment(E.Location)]));
+  Line(Format('  %s = %s;%s', [EscapeIdent(E.Name), Underlying, LocComment(E.Location)]));
   if E.Constants.Count > 0 then
   begin
     Line('const');
     for I := 0 to E.Constants.Count - 1 do
     begin
       C := E.Constants.Items[I];
-      Line(Format('  %s = %d;', [C.Name, C.Value]));
+      Line(Format('  %s = %d;', [EscapeIdent(C.Name), C.Value]));
     end;
     Line('type');
   end;
@@ -302,7 +339,7 @@ begin
   { Skip vacuous self-typedefs: `typedef struct Foo Foo;` produces a
     decl whose spelling is the same as the typedef name. }
   if Aliased = T.Name then Exit;
-  Line(Format('  %s = %s;%s', [T.Name, Aliased, LocComment(T.Location)]));
+  Line(Format('  %s = %s;%s', [EscapeIdent(T.Name), Aliased, LocComment(T.Location)]));
 end;
 
 procedure TFpcEmitter.EmitDecl(D: TBindingDecl);
