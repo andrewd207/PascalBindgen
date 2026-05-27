@@ -16,6 +16,7 @@ type
   PPbgTU         = Pointer;
   PPbgCursor     = Pointer;
   PPbgCursorList = Pointer;
+  PPbgType       = Pointer;
 
   PPbgTUPtr = ^PPbgTU;
 
@@ -72,6 +73,56 @@ function  pbg_kind_field_decl:    cint; cdecl; external 'clang_shim';
 function  pbg_kind_macro_def:     cint; cdecl; external 'clang_shim';
 function  pbg_kind_parm_decl:     cint; cdecl; external 'clang_shim';
 function  pbg_kind_var_decl:      cint; cdecl; external 'clang_shim';
+
+{ types }
+function  pbg_cursor_type(p: PPbgCursor): PPbgType; cdecl; external 'clang_shim';
+function  pbg_cursor_typedef_underlying(p: PPbgCursor): PPbgType; cdecl; external 'clang_shim';
+function  pbg_cursor_enum_integer_type(p: PPbgCursor): PPbgType; cdecl; external 'clang_shim';
+function  pbg_cursor_enum_constant_value(p: PPbgCursor): cint64; cdecl; external 'clang_shim';
+function  pbg_cursor_field_bit_width(p: PPbgCursor): cint; cdecl; external 'clang_shim';
+
+procedure pbg_type_dispose(p: PPbgType); cdecl; external 'clang_shim';
+function  pbg_type_kind(p: PPbgType): cint; cdecl; external 'clang_shim';
+function  pbg_type_spelling(p: PPbgType): PChar; cdecl; external 'clang_shim';
+function  pbg_type_is_const_qualified(p: PPbgType): cint; cdecl; external 'clang_shim';
+function  pbg_type_pointee(p: PPbgType): PPbgType; cdecl; external 'clang_shim';
+function  pbg_type_canonical(p: PPbgType): PPbgType; cdecl; external 'clang_shim';
+function  pbg_type_array_element(p: PPbgType): PPbgType; cdecl; external 'clang_shim';
+function  pbg_type_array_size(p: PPbgType): cint64; cdecl; external 'clang_shim';
+function  pbg_type_result(p: PPbgType): PPbgType; cdecl; external 'clang_shim';
+function  pbg_type_num_args(p: PPbgType): cint; cdecl; external 'clang_shim';
+function  pbg_type_arg(p: PPbgType; i: cint): PPbgType; cdecl; external 'clang_shim';
+function  pbg_type_is_variadic(p: PPbgType): cint; cdecl; external 'clang_shim';
+function  pbg_type_declaration(p: PPbgType): PPbgCursor; cdecl; external 'clang_shim';
+
+{ stable type-kind constants }
+function  pbg_typekind_invalid:        cint; cdecl; external 'clang_shim';
+function  pbg_typekind_void:           cint; cdecl; external 'clang_shim';
+function  pbg_typekind_bool:           cint; cdecl; external 'clang_shim';
+function  pbg_typekind_char_s:         cint; cdecl; external 'clang_shim';
+function  pbg_typekind_char_u:         cint; cdecl; external 'clang_shim';
+function  pbg_typekind_schar:          cint; cdecl; external 'clang_shim';
+function  pbg_typekind_uchar:          cint; cdecl; external 'clang_shim';
+function  pbg_typekind_short:          cint; cdecl; external 'clang_shim';
+function  pbg_typekind_ushort:         cint; cdecl; external 'clang_shim';
+function  pbg_typekind_int:            cint; cdecl; external 'clang_shim';
+function  pbg_typekind_uint:           cint; cdecl; external 'clang_shim';
+function  pbg_typekind_long:           cint; cdecl; external 'clang_shim';
+function  pbg_typekind_ulong:          cint; cdecl; external 'clang_shim';
+function  pbg_typekind_longlong:       cint; cdecl; external 'clang_shim';
+function  pbg_typekind_ulonglong:      cint; cdecl; external 'clang_shim';
+function  pbg_typekind_float:          cint; cdecl; external 'clang_shim';
+function  pbg_typekind_double:         cint; cdecl; external 'clang_shim';
+function  pbg_typekind_longdouble:     cint; cdecl; external 'clang_shim';
+function  pbg_typekind_pointer:        cint; cdecl; external 'clang_shim';
+function  pbg_typekind_record:         cint; cdecl; external 'clang_shim';
+function  pbg_typekind_enum:           cint; cdecl; external 'clang_shim';
+function  pbg_typekind_typedef:        cint; cdecl; external 'clang_shim';
+function  pbg_typekind_constantarray:  cint; cdecl; external 'clang_shim';
+function  pbg_typekind_incompletearray:cint; cdecl; external 'clang_shim';
+function  pbg_typekind_functionproto:  cint; cdecl; external 'clang_shim';
+function  pbg_typekind_functionnoproto:cint; cdecl; external 'clang_shim';
+function  pbg_typekind_elaborated:     cint; cdecl; external 'clang_shim';
 
 { child enumeration }
 function  pbg_cursor_children(p: PPbgCursor): PPbgCursorList;

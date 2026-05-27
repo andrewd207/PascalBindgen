@@ -4,7 +4,7 @@ program TestRunner;
 
 uses
   Classes, SysUtils, fpcunit, testregistry, consoletestrunner,
-  bindgen.ir, bindgen.parser;
+  bindgen.ir, bindgen.parser, clang.wrap;
 
 type
   TIRTests = class(TTestCase)
@@ -23,6 +23,17 @@ type
     procedure ExtractsExpectedTopLevelDecls;
     procedure FiltersOutSystemHeaderDecls;
     procedure CapturesDoxygenCommentVerbatim;
+  end;
+
+  TClangTypeTests = class(TTestCase)
+  private
+    function FindCursor(Idx: TClangIndex; const Header, Spelling: string;
+                        Kind: Integer): TClangCursor;
+  published
+    procedure FunctionReturnTypeIsInt;
+    procedure FunctionParamCountMatches;
+    procedure VariadicDetected;
+    procedure ConstParamQualified;
   end;
 
 procedure TIRTests.FunctionDeclCarriesNameAndLocation;
@@ -182,6 +193,179 @@ begin
   end;
 end;
 
+{ TClangTypeTests }
+
+function TClangTypeTests.FindCursor(Idx: TClangIndex; const Header, Spelling: string;
+                                    Kind: Integer): TClangCursor;
+var
+  TU: TClangTranslationUnit;
+  Root: TClangCursor;
+  Kids: TClangCursorArray;
+  I: Integer;
+begin
+  Result := nil;
+  TU := Idx.Parse(Header, []);
+  try
+    Root := TU.RootCursor;
+    try
+      Kids := Root.Children;
+      try
+        for I := 0 to High(Kids) do
+          if (Kids[I].Kind = Kind) and (Kids[I].Spelling = Spelling) then
+          begin
+            { transfer ownership out of the kids array }
+            Result := Kids[I];
+            Kids[I] := nil;
+            Break;
+          end;
+      finally
+        for I := 0 to High(Kids) do
+          if Kids[I] <> nil then Kids[I].Free;
+      end;
+    finally
+      Root.Free;
+    end;
+  finally
+    TU.Free;
+  end;
+  if Result = nil then
+    Fail('cursor not found: ' + Spelling);
+end;
+
+procedure TClangTypeTests.FunctionReturnTypeIsInt;
+const
+  Snippet = 'int add(int a, int b);';
+var
+  TmpH: string;
+  Idx: TClangIndex;
+  C: TClangCursor;
+  T, R: TClangType;
+begin
+  TmpH := GetTempFileName + '.h';
+  with TFileStream.Create(TmpH, fmCreate) do
+    try Write(Snippet[1], Length(Snippet)); finally Free; end;
+  Idx := TClangIndex.Create(False, False);
+  try
+    C := FindCursor(Idx, TmpH, 'add', TClangKinds.FunctionDecl);
+    try
+      T := C.TypeOf;
+      try
+        R := T.ResultType;
+        try
+          AssertEquals('return kind = Int', TClangTypeKinds.Int, R.Kind);
+        finally
+          R.Free;
+        end;
+      finally
+        T.Free;
+      end;
+    finally
+      C.Free;
+    end;
+  finally
+    Idx.Free;
+    DeleteFile(TmpH);
+  end;
+end;
+
+procedure TClangTypeTests.FunctionParamCountMatches;
+const
+  Snippet = 'void f(int a, int b, int c);';
+var
+  TmpH: string;
+  Idx: TClangIndex;
+  C: TClangCursor;
+  T: TClangType;
+begin
+  TmpH := GetTempFileName + '.h';
+  with TFileStream.Create(TmpH, fmCreate) do
+    try Write(Snippet[1], Length(Snippet)); finally Free; end;
+  Idx := TClangIndex.Create(False, False);
+  try
+    C := FindCursor(Idx, TmpH, 'f', TClangKinds.FunctionDecl);
+    try
+      T := C.TypeOf;
+      try
+        AssertEquals('param count', 3, T.NumArgs);
+      finally
+        T.Free;
+      end;
+    finally
+      C.Free;
+    end;
+  finally
+    Idx.Free;
+    DeleteFile(TmpH);
+  end;
+end;
+
+procedure TClangTypeTests.VariadicDetected;
+const
+  Snippet = 'int printf(const char *fmt, ...);';
+var
+  TmpH: string;
+  Idx: TClangIndex;
+  C: TClangCursor;
+  T: TClangType;
+begin
+  TmpH := GetTempFileName + '.h';
+  with TFileStream.Create(TmpH, fmCreate) do
+    try Write(Snippet[1], Length(Snippet)); finally Free; end;
+  Idx := TClangIndex.Create(False, False);
+  try
+    C := FindCursor(Idx, TmpH, 'printf', TClangKinds.FunctionDecl);
+    try
+      T := C.TypeOf;
+      try
+        AssertTrue('variadic', T.IsVariadic);
+      finally
+        T.Free;
+      end;
+    finally
+      C.Free;
+    end;
+  finally
+    Idx.Free;
+    DeleteFile(TmpH);
+  end;
+end;
+
+procedure TClangTypeTests.ConstParamQualified;
+const
+  Snippet = 'void g(const int x);';
+var
+  TmpH: string;
+  Idx: TClangIndex;
+  C: TClangCursor;
+  T, A: TClangType;
+begin
+  TmpH := GetTempFileName + '.h';
+  with TFileStream.Create(TmpH, fmCreate) do
+    try Write(Snippet[1], Length(Snippet)); finally Free; end;
+  Idx := TClangIndex.Create(False, False);
+  try
+    C := FindCursor(Idx, TmpH, 'g', TClangKinds.FunctionDecl);
+    try
+      T := C.TypeOf;
+      try
+        A := T.Arg(0);
+        try
+          AssertTrue('const-qualified', A.IsConstQualified);
+        finally
+          A.Free;
+        end;
+      finally
+        T.Free;
+      end;
+    finally
+      C.Free;
+    end;
+  finally
+    Idx.Free;
+    DeleteFile(TmpH);
+  end;
+end;
+
 var
   Application: TTestRunner;
 
@@ -190,6 +374,7 @@ begin
   try
     RegisterTest(TIRTests);
     RegisterTest(TParserTests);
+    RegisterTest(TClangTypeTests);
     Application.Initialize;
     Application.Run;
   finally

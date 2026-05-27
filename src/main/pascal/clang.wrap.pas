@@ -15,6 +15,26 @@ type
   TClangCursor = class;
   TClangCursorArray = array of TClangCursor;
 
+  TClangType = class
+  private
+    FHandle: PPbgType;
+  public
+    constructor Create(AHandle: PPbgType);
+    destructor Destroy; override;
+    function Kind: Integer;
+    function Spelling: string;
+    function IsConstQualified: Boolean;
+    function IsVariadic: Boolean;
+    function Pointee: TClangType;       { nil if not a pointer }
+    function Canonical: TClangType;
+    function ArrayElement: TClangType;
+    function ArraySize: Int64;          { -1 if not a constant-size array }
+    function ResultType: TClangType;    { for function-proto types }
+    function NumArgs: Integer;          { -1 if not a function }
+    function Arg(I: Integer): TClangType;
+    function Declaration: TClangCursor; { decl behind record/enum/typedef ref }
+  end;
+
   TClangCursor = class
   private
     FHandle: PPbgCursor;
@@ -27,6 +47,11 @@ type
     function Spelling: string;
     function InMainFile: Boolean;
     function RawComment: string;
+    function TypeOf: TClangType;
+    function TypedefUnderlying: TClangType;
+    function EnumIntegerType: TClangType;
+    function EnumConstantValue: Int64;
+    function FieldBitWidth: Integer;
     procedure Location(out FileName: string; out Line, Col: Cardinal);
     function Children: TClangCursorArray;
   end;
@@ -43,6 +68,37 @@ type
     class function MacroDef: Integer; static;
     class function ParmDecl: Integer; static;
     class function VarDecl: Integer; static;
+  end;
+
+  TClangTypeKinds = record
+  public
+    class function Invalid: Integer; static;
+    class function Void: Integer; static;
+    class function Bool: Integer; static;
+    class function CharS: Integer; static;
+    class function CharU: Integer; static;
+    class function SChar: Integer; static;
+    class function UChar: Integer; static;
+    class function Short: Integer; static;
+    class function UShort: Integer; static;
+    class function Int: Integer; static;
+    class function UInt: Integer; static;
+    class function Long: Integer; static;
+    class function ULong: Integer; static;
+    class function LongLong: Integer; static;
+    class function ULongLong: Integer; static;
+    class function Float: Integer; static;
+    class function Double: Integer; static;
+    class function LongDouble: Integer; static;
+    class function Pointer_: Integer; static;
+    class function Record_: Integer; static;
+    class function Enum: Integer; static;
+    class function Typedef: Integer; static;
+    class function ConstantArray: Integer; static;
+    class function IncompleteArray: Integer; static;
+    class function FunctionProto: Integer; static;
+    class function FunctionNoProto: Integer; static;
+    class function Elaborated: Integer; static;
   end;
 
   TClangTranslationUnit = class
@@ -201,6 +257,137 @@ function TClangCursor.InMainFile: Boolean;
 begin
   Result := pbg_cursor_in_main_file(FHandle) <> 0;
 end;
+
+function TClangCursor.TypeOf: TClangType;
+begin
+  Result := TClangType.Create(pbg_cursor_type(FHandle));
+end;
+
+function TClangCursor.TypedefUnderlying: TClangType;
+begin
+  Result := TClangType.Create(pbg_cursor_typedef_underlying(FHandle));
+end;
+
+function TClangCursor.EnumIntegerType: TClangType;
+begin
+  Result := TClangType.Create(pbg_cursor_enum_integer_type(FHandle));
+end;
+
+function TClangCursor.EnumConstantValue: Int64;
+begin
+  Result := pbg_cursor_enum_constant_value(FHandle);
+end;
+
+function TClangCursor.FieldBitWidth: Integer;
+begin
+  Result := pbg_cursor_field_bit_width(FHandle);
+end;
+
+{ TClangType }
+
+constructor TClangType.Create(AHandle: PPbgType);
+begin
+  inherited Create;
+  FHandle := AHandle;
+end;
+
+destructor TClangType.Destroy;
+begin
+  if FHandle <> nil then pbg_type_dispose(FHandle);
+  inherited;
+end;
+
+function TClangType.Kind: Integer;
+begin
+  Result := pbg_type_kind(FHandle);
+end;
+
+function TClangType.Spelling: string;
+var
+  P: PChar;
+begin
+  P := pbg_type_spelling(FHandle);
+  Result := CStrOrEmpty(P);
+  if P <> nil then pbg_free_string(P);
+end;
+
+function TClangType.IsConstQualified: Boolean;
+begin
+  Result := pbg_type_is_const_qualified(FHandle) <> 0;
+end;
+
+function TClangType.IsVariadic: Boolean;
+begin
+  Result := pbg_type_is_variadic(FHandle) <> 0;
+end;
+
+function TClangType.Pointee: TClangType;
+begin
+  Result := TClangType.Create(pbg_type_pointee(FHandle));
+end;
+
+function TClangType.Canonical: TClangType;
+begin
+  Result := TClangType.Create(pbg_type_canonical(FHandle));
+end;
+
+function TClangType.ArrayElement: TClangType;
+begin
+  Result := TClangType.Create(pbg_type_array_element(FHandle));
+end;
+
+function TClangType.ArraySize: Int64;
+begin
+  Result := pbg_type_array_size(FHandle);
+end;
+
+function TClangType.ResultType: TClangType;
+begin
+  Result := TClangType.Create(pbg_type_result(FHandle));
+end;
+
+function TClangType.NumArgs: Integer;
+begin
+  Result := pbg_type_num_args(FHandle);
+end;
+
+function TClangType.Arg(I: Integer): TClangType;
+begin
+  Result := TClangType.Create(pbg_type_arg(FHandle, I));
+end;
+
+function TClangType.Declaration: TClangCursor;
+begin
+  Result := TClangCursor.Create(pbg_type_declaration(FHandle));
+end;
+
+class function TClangTypeKinds.Invalid: Integer;        begin Result := pbg_typekind_invalid; end;
+class function TClangTypeKinds.Void: Integer;           begin Result := pbg_typekind_void; end;
+class function TClangTypeKinds.Bool: Integer;           begin Result := pbg_typekind_bool; end;
+class function TClangTypeKinds.CharS: Integer;          begin Result := pbg_typekind_char_s; end;
+class function TClangTypeKinds.CharU: Integer;          begin Result := pbg_typekind_char_u; end;
+class function TClangTypeKinds.SChar: Integer;          begin Result := pbg_typekind_schar; end;
+class function TClangTypeKinds.UChar: Integer;          begin Result := pbg_typekind_uchar; end;
+class function TClangTypeKinds.Short: Integer;          begin Result := pbg_typekind_short; end;
+class function TClangTypeKinds.UShort: Integer;         begin Result := pbg_typekind_ushort; end;
+class function TClangTypeKinds.Int: Integer;            begin Result := pbg_typekind_int; end;
+class function TClangTypeKinds.UInt: Integer;           begin Result := pbg_typekind_uint; end;
+class function TClangTypeKinds.Long: Integer;           begin Result := pbg_typekind_long; end;
+class function TClangTypeKinds.ULong: Integer;          begin Result := pbg_typekind_ulong; end;
+class function TClangTypeKinds.LongLong: Integer;       begin Result := pbg_typekind_longlong; end;
+class function TClangTypeKinds.ULongLong: Integer;      begin Result := pbg_typekind_ulonglong; end;
+class function TClangTypeKinds.Float: Integer;          begin Result := pbg_typekind_float; end;
+class function TClangTypeKinds.Double: Integer;         begin Result := pbg_typekind_double; end;
+class function TClangTypeKinds.LongDouble: Integer;     begin Result := pbg_typekind_longdouble; end;
+class function TClangTypeKinds.Pointer_: Integer;       begin Result := pbg_typekind_pointer; end;
+class function TClangTypeKinds.Record_: Integer;        begin Result := pbg_typekind_record; end;
+class function TClangTypeKinds.Enum: Integer;           begin Result := pbg_typekind_enum; end;
+class function TClangTypeKinds.Typedef: Integer;        begin Result := pbg_typekind_typedef; end;
+class function TClangTypeKinds.ConstantArray: Integer;  begin Result := pbg_typekind_constantarray; end;
+class function TClangTypeKinds.IncompleteArray: Integer;begin Result := pbg_typekind_incompletearray; end;
+class function TClangTypeKinds.FunctionProto: Integer;  begin Result := pbg_typekind_functionproto; end;
+class function TClangTypeKinds.FunctionNoProto: Integer;begin Result := pbg_typekind_functionnoproto; end;
+class function TClangTypeKinds.Elaborated: Integer;     begin Result := pbg_typekind_elaborated; end;
 
 function TClangCursor.RawComment: string;
 var

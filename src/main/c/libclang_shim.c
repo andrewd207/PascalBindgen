@@ -176,6 +176,136 @@ int pbg_kind_macro_def(void)      { return (int)CXCursor_MacroDefinition; }
 int pbg_kind_parm_decl(void)      { return (int)CXCursor_ParmDecl; }
 int pbg_kind_var_decl(void)       { return (int)CXCursor_VarDecl; }
 
+/* --- types ---
+ *
+ * CXType is a 16-byte struct passed by value across the libclang API.
+ * We heap-wrap it the same way we wrap CXCursor, so the Pascal side
+ * only ever sees a pointer. Returning a zero-kind type means "absent"
+ * (e.g. clang_getPointeeType on a non-pointer); callers should check
+ * pbg_type_kind() before drilling further. */
+
+typedef struct PbgType {
+    CXType t;
+} PbgType;
+
+static PbgType* wrap_type(CXType t) {
+    PbgType* w = (PbgType*)malloc(sizeof(*w));
+    if (!w) return NULL;
+    w->t = t;
+    return w;
+}
+
+void pbg_type_dispose(PbgType* p) {
+    if (p) free(p);
+}
+
+PbgType* pbg_cursor_type(PbgCursor* p) {
+    return wrap_type(clang_getCursorType(p->c));
+}
+
+/* Cursor of the typedef'd underlying type — for TypedefDecl cursors. */
+PbgType* pbg_cursor_typedef_underlying(PbgCursor* p) {
+    return wrap_type(clang_getTypedefDeclUnderlyingType(p->c));
+}
+
+/* Cursor of the enum's integer type — for EnumDecl cursors. */
+PbgType* pbg_cursor_enum_integer_type(PbgCursor* p) {
+    return wrap_type(clang_getEnumDeclIntegerType(p->c));
+}
+
+/* Signed value for an EnumConstantDecl cursor. */
+long long pbg_cursor_enum_constant_value(PbgCursor* p) {
+    return (long long)clang_getEnumConstantDeclValue(p->c);
+}
+
+/* Bit width for FieldDecl, or -1 if not a bit-field. */
+int pbg_cursor_field_bit_width(PbgCursor* p) {
+    return clang_getFieldDeclBitWidth(p->c);
+}
+
+int pbg_type_kind(PbgType* p) {
+    return (int)p->t.kind;
+}
+
+const char* pbg_type_spelling(PbgType* p) {
+    CXString s = clang_getTypeSpelling(p->t);
+    const char* raw = clang_getCString(s);
+    char* copy = raw ? strdup(raw) : NULL;
+    clang_disposeString(s);
+    return copy;
+}
+
+int pbg_type_is_const_qualified(PbgType* p) {
+    return clang_isConstQualifiedType(p->t) ? 1 : 0;
+}
+
+PbgType* pbg_type_pointee(PbgType* p) {
+    return wrap_type(clang_getPointeeType(p->t));
+}
+
+PbgType* pbg_type_canonical(PbgType* p) {
+    return wrap_type(clang_getCanonicalType(p->t));
+}
+
+PbgType* pbg_type_array_element(PbgType* p) {
+    return wrap_type(clang_getArrayElementType(p->t));
+}
+
+long long pbg_type_array_size(PbgType* p) {
+    return (long long)clang_getArraySize(p->t);
+}
+
+PbgType* pbg_type_result(PbgType* p) {
+    return wrap_type(clang_getResultType(p->t));
+}
+
+int pbg_type_num_args(PbgType* p) {
+    return clang_getNumArgTypes(p->t);
+}
+
+PbgType* pbg_type_arg(PbgType* p, int i) {
+    return wrap_type(clang_getArgType(p->t, (unsigned)i));
+}
+
+int pbg_type_is_variadic(PbgType* p) {
+    return clang_isFunctionTypeVariadic(p->t) ? 1 : 0;
+}
+
+/* Cursor of the declaration this type refers to (struct/union/enum/typedef).
+ * Returns a cursor whose kind is CXCursor_NoDeclFound when there is none. */
+PbgCursor* pbg_type_declaration(PbgType* p) {
+    return wrap_cursor(clang_getTypeDeclaration(p->t));
+}
+
+/* Stable CXTypeKind constants. Same idea as the cursor-kind helpers. */
+int pbg_typekind_invalid(void)        { return (int)CXType_Invalid; }
+int pbg_typekind_void(void)           { return (int)CXType_Void; }
+int pbg_typekind_bool(void)           { return (int)CXType_Bool; }
+int pbg_typekind_char_s(void)         { return (int)CXType_Char_S; }
+int pbg_typekind_char_u(void)         { return (int)CXType_Char_U; }
+int pbg_typekind_schar(void)          { return (int)CXType_SChar; }
+int pbg_typekind_uchar(void)          { return (int)CXType_UChar; }
+int pbg_typekind_short(void)          { return (int)CXType_Short; }
+int pbg_typekind_ushort(void)         { return (int)CXType_UShort; }
+int pbg_typekind_int(void)            { return (int)CXType_Int; }
+int pbg_typekind_uint(void)           { return (int)CXType_UInt; }
+int pbg_typekind_long(void)           { return (int)CXType_Long; }
+int pbg_typekind_ulong(void)          { return (int)CXType_ULong; }
+int pbg_typekind_longlong(void)       { return (int)CXType_LongLong; }
+int pbg_typekind_ulonglong(void)      { return (int)CXType_ULongLong; }
+int pbg_typekind_float(void)          { return (int)CXType_Float; }
+int pbg_typekind_double(void)         { return (int)CXType_Double; }
+int pbg_typekind_longdouble(void)     { return (int)CXType_LongDouble; }
+int pbg_typekind_pointer(void)        { return (int)CXType_Pointer; }
+int pbg_typekind_record(void)         { return (int)CXType_Record; }
+int pbg_typekind_enum(void)           { return (int)CXType_Enum; }
+int pbg_typekind_typedef(void)        { return (int)CXType_Typedef; }
+int pbg_typekind_constantarray(void)  { return (int)CXType_ConstantArray; }
+int pbg_typekind_incompletearray(void){ return (int)CXType_IncompleteArray; }
+int pbg_typekind_functionproto(void)  { return (int)CXType_FunctionProto; }
+int pbg_typekind_functionnoproto(void){ return (int)CXType_FunctionNoProto; }
+int pbg_typekind_elaborated(void)     { return (int)CXType_Elaborated; }
+
 /* --- child enumeration ---
  *
  * Instead of exposing clang_visitChildren (which takes a callback that
