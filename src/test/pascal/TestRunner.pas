@@ -524,10 +524,10 @@ begin
   end;
 
   { Spot-check a couple of escapes landed. }
-  AssertTrue('&file param present', Pos('&file:', Src) > 0);
-  AssertTrue('&type param present', Pos('&type:', Src) > 0);
-  AssertTrue('&begin field present', Pos('&begin:', Src) > 0);
-  AssertTrue('&in param present',   Pos('&in:', Src) > 0);
+  AssertTrue('file_ param present',  Pos('file_:', Src) > 0);
+  AssertTrue('type_ param present',  Pos('type_:', Src) > 0);
+  AssertTrue('begin_ field present', Pos('begin_:', Src) > 0);
+  AssertTrue('in_ param present',    Pos('in_:', Src) > 0);
 
   { And compile the whole thing under fpc -Cn — if a collision still
     snuck through, this is what catches it. }

@@ -108,7 +108,7 @@ function inflateReset2(strm: Pz_stream_s; windowBits: cint): cint; cdecl; extern
 function inflatePrime(strm: Pz_stream_s; bits: cint; value: cint): cint; cdecl; external 'libz' name 'inflatePrime';  { zlib.h:986 }
 function inflateMark(strm: Pz_stream_s): clong; cdecl; external 'libz' name 'inflateMark';  { zlib.h:1007 }
 function inflateGetHeader(strm: Pz_stream_s; head: Pgz_header_s): cint; cdecl; external 'libz' name 'inflateGetHeader';  { zlib.h:1035 }
-function inflateBack(strm: Pz_stream_s; &in: Punsigned int (void *, unsigned char **); in_desc: Pointer; &out: Pint (void *, unsigned char *, unsigned int); out_desc: Pointer): cint; cdecl; external 'libz' name 'inflateBack';  { zlib.h:1101 }
+function inflateBack(strm: Pz_stream_s; in_: Punsigned int (void *, unsigned char **); in_desc: Pointer; out_: Pint (void *, unsigned char *, unsigned int); out_desc: Pointer): cint; cdecl; external 'libz' name 'inflateBack';  { zlib.h:1101 }
 function inflateBackEnd(strm: Pz_stream_s): cint; cdecl; external 'libz' name 'inflateBackEnd';  { zlib.h:1171 }
 function zlibCompileFlags: uLong; cdecl; external 'libz' name 'zlibCompileFlags';  { zlib.h:1179 }
 function compress(dest: PBytef; destLen: PuLongf; source: PBytef; sourceLen: uLong): cint; cdecl; external 'libz' name 'compress';  { zlib.h:1232 }
@@ -117,27 +117,27 @@ function compressBound(sourceLen: uLong): uLong; cdecl; external 'libz' name 'co
 function uncompress(dest: PBytef; destLen: PuLongf; source: PBytef; sourceLen: uLong): cint; cdecl; external 'libz' name 'uncompress';  { zlib.h:1270 }
 function uncompress2(dest: PBytef; destLen: PuLongf; source: PBytef; sourceLen: PuLong): cint; cdecl; external 'libz' name 'uncompress2';  { zlib.h:1288 }
 function gzdopen(fd: cint; mode: PAnsiChar): PgzFile_s; cdecl; external 'libz' name 'gzdopen';  { zlib.h:1345 }
-function gzbuffer(&file: PgzFile_s; size: cuint): cint; cdecl; external 'libz' name 'gzbuffer';  { zlib.h:1368 }
-function gzsetparams(&file: PgzFile_s; level: cint; strategy: cint): cint; cdecl; external 'libz' name 'gzsetparams';  { zlib.h:1384 }
-function gzread(&file: PgzFile_s; buf: Pointer; len: cuint): cint; cdecl; external 'libz' name 'gzread';  { zlib.h:1395 }
-function gzfread(buf: Pointer; size: z_size_t; nitems: z_size_t; &file: PgzFile_s): z_size_t; cdecl; external 'libz' name 'gzfread';  { zlib.h:1425 }
-function gzwrite(&file: PgzFile_s; buf: Pointer; len: cuint): cint; cdecl; external 'libz' name 'gzwrite';  { zlib.h:1451 }
-function gzfwrite(buf: Pointer; size: z_size_t; nitems: z_size_t; &file: PgzFile_s): z_size_t; cdecl; external 'libz' name 'gzfwrite';  { zlib.h:1457 }
-function gzprintf(&file: PgzFile_s; format: PAnsiChar): cint; cdecl; varargs; external 'libz' name 'gzprintf';  { zlib.h:1471 }
-function gzputs(&file: PgzFile_s; s: PAnsiChar): cint; cdecl; external 'libz' name 'gzputs';  { zlib.h:1486 }
-function gzgets(&file: PgzFile_s; buf: PAnsiChar; len: cint): PAnsiChar; cdecl; external 'libz' name 'gzgets';  { zlib.h:1494 }
-function gzputc(&file: PgzFile_s; c: cint): cint; cdecl; external 'libz' name 'gzputc';  { zlib.h:1508 }
-function gzgetc(&file: PgzFile_s): cint; cdecl; external 'libz' name 'gzgetc';  { zlib.h:1514 }
-function gzungetc(c: cint; &file: PgzFile_s): cint; cdecl; external 'libz' name 'gzungetc';  { zlib.h:1523 }
-function gzflush(&file: PgzFile_s; flush: cint): cint; cdecl; external 'libz' name 'gzflush';  { zlib.h:1535 }
-function gzrewind(&file: PgzFile_s): cint; cdecl; external 'libz' name 'gzrewind';  { zlib.h:1570 }
-function gzeof(&file: PgzFile_s): cint; cdecl; external 'libz' name 'gzeof';  { zlib.h:1598 }
-function gzdirect(&file: PgzFile_s): cint; cdecl; external 'libz' name 'gzdirect';  { zlib.h:1613 }
-function gzclose(&file: PgzFile_s): cint; cdecl; external 'libz' name 'gzclose';  { zlib.h:1634 }
-function gzclose_r(&file: PgzFile_s): cint; cdecl; external 'libz' name 'gzclose_r';  { zlib.h:1647 }
-function gzclose_w(&file: PgzFile_s): cint; cdecl; external 'libz' name 'gzclose_w';  { zlib.h:1648 }
-function gzerror(&file: PgzFile_s; errnum: Pcint): PAnsiChar; cdecl; external 'libz' name 'gzerror';  { zlib.h:1659 }
-procedure gzclearerr(&file: PgzFile_s); cdecl; external 'libz' name 'gzclearerr';  { zlib.h:1675 }
+function gzbuffer(file_: PgzFile_s; size: cuint): cint; cdecl; external 'libz' name 'gzbuffer';  { zlib.h:1368 }
+function gzsetparams(file_: PgzFile_s; level: cint; strategy: cint): cint; cdecl; external 'libz' name 'gzsetparams';  { zlib.h:1384 }
+function gzread(file_: PgzFile_s; buf: Pointer; len: cuint): cint; cdecl; external 'libz' name 'gzread';  { zlib.h:1395 }
+function gzfread(buf: Pointer; size: z_size_t; nitems: z_size_t; file_: PgzFile_s): z_size_t; cdecl; external 'libz' name 'gzfread';  { zlib.h:1425 }
+function gzwrite(file_: PgzFile_s; buf: Pointer; len: cuint): cint; cdecl; external 'libz' name 'gzwrite';  { zlib.h:1451 }
+function gzfwrite(buf: Pointer; size: z_size_t; nitems: z_size_t; file_: PgzFile_s): z_size_t; cdecl; external 'libz' name 'gzfwrite';  { zlib.h:1457 }
+function gzprintf(file_: PgzFile_s; format: PAnsiChar): cint; cdecl; varargs; external 'libz' name 'gzprintf';  { zlib.h:1471 }
+function gzputs(file_: PgzFile_s; s: PAnsiChar): cint; cdecl; external 'libz' name 'gzputs';  { zlib.h:1486 }
+function gzgets(file_: PgzFile_s; buf: PAnsiChar; len: cint): PAnsiChar; cdecl; external 'libz' name 'gzgets';  { zlib.h:1494 }
+function gzputc(file_: PgzFile_s; c: cint): cint; cdecl; external 'libz' name 'gzputc';  { zlib.h:1508 }
+function gzgetc(file_: PgzFile_s): cint; cdecl; external 'libz' name 'gzgetc';  { zlib.h:1514 }
+function gzungetc(c: cint; file_: PgzFile_s): cint; cdecl; external 'libz' name 'gzungetc';  { zlib.h:1523 }
+function gzflush(file_: PgzFile_s; flush: cint): cint; cdecl; external 'libz' name 'gzflush';  { zlib.h:1535 }
+function gzrewind(file_: PgzFile_s): cint; cdecl; external 'libz' name 'gzrewind';  { zlib.h:1570 }
+function gzeof(file_: PgzFile_s): cint; cdecl; external 'libz' name 'gzeof';  { zlib.h:1598 }
+function gzdirect(file_: PgzFile_s): cint; cdecl; external 'libz' name 'gzdirect';  { zlib.h:1613 }
+function gzclose(file_: PgzFile_s): cint; cdecl; external 'libz' name 'gzclose';  { zlib.h:1634 }
+function gzclose_r(file_: PgzFile_s): cint; cdecl; external 'libz' name 'gzclose_r';  { zlib.h:1647 }
+function gzclose_w(file_: PgzFile_s): cint; cdecl; external 'libz' name 'gzclose_w';  { zlib.h:1648 }
+function gzerror(file_: PgzFile_s; errnum: Pcint): PAnsiChar; cdecl; external 'libz' name 'gzerror';  { zlib.h:1659 }
+procedure gzclearerr(file_: PgzFile_s); cdecl; external 'libz' name 'gzclearerr';  { zlib.h:1675 }
 function adler32(adler: uLong; buf: PBytef; len: uInt): uLong; cdecl; external 'libz' name 'adler32';  { zlib.h:1692 }
 function adler32_z(adler: uLong; buf: PBytef; len: z_size_t): uLong; cdecl; external 'libz' name 'adler32_z';  { zlib.h:1712 }
 function crc32(crc: uLong; buf: PBytef; len: uInt): uLong; cdecl; external 'libz' name 'crc32';  { zlib.h:1730 }
@@ -148,7 +148,7 @@ function inflateInit_(strm: Pz_stream_s; version: PAnsiChar; stream_size: cint):
 function deflateInit2_(strm: Pz_stream_s; level: cint; method: cint; windowBits: cint; memLevel: cint; strategy: cint; version: PAnsiChar; stream_size: cint): cint; cdecl; external 'libz' name 'deflateInit2_';  { zlib.h:1788 }
 function inflateInit2_(strm: Pz_stream_s; windowBits: cint; version: PAnsiChar; stream_size: cint): cint; cdecl; external 'libz' name 'inflateInit2_';  { zlib.h:1792 }
 function inflateBackInit_(strm: Pz_stream_s; windowBits: cint; window: Pcuchar; version: PAnsiChar; stream_size: cint): cint; cdecl; external 'libz' name 'inflateBackInit_';  { zlib.h:1794 }
-function gzgetc_(&file: PgzFile_s): cint; cdecl; external 'libz' name 'gzgetc_';  { zlib.h:1842 }
+function gzgetc_(file_: PgzFile_s): cint; cdecl; external 'libz' name 'gzgetc_';  { zlib.h:1842 }
 function gzopen(arg1: PAnsiChar; arg2: PAnsiChar): PgzFile_s; cdecl; external 'libz' name 'gzopen';  { zlib.h:1896 }
 function gzseek(arg1: PgzFile_s; arg2: off_t; arg3: cint): off_t; cdecl; external 'libz' name 'gzseek';  { zlib.h:1897 }
 function gztell(arg1: PgzFile_s): off_t; cdecl; external 'libz' name 'gztell';  { zlib.h:1898 }
@@ -164,7 +164,7 @@ function inflateValidate(arg1: Pz_stream_s; arg2: cint): cint; cdecl; external '
 function inflateCodesUsed(arg1: Pz_stream_s): culong; cdecl; external 'libz' name 'inflateCodesUsed';  { zlib.h:1919 }
 function inflateResetKeep(arg1: Pz_stream_s): cint; cdecl; external 'libz' name 'inflateResetKeep';  { zlib.h:1920 }
 function deflateResetKeep(arg1: Pz_stream_s): cint; cdecl; external 'libz' name 'deflateResetKeep';  { zlib.h:1921 }
-function gzvprintf(&file: PgzFile_s; format: PAnsiChar; va: array[0..0] of __va_list_tag): cint; cdecl; external 'libz' name 'gzvprintf';  { zlib.h:1928 }
+function gzvprintf(file_: PgzFile_s; format: PAnsiChar; va: array[0..0] of __va_list_tag): cint; cdecl; external 'libz' name 'gzvprintf';  { zlib.h:1928 }
 
 implementation
 

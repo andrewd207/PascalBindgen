@@ -81,10 +81,11 @@ begin
 end;
 
 { FPC reserved-word table (objfpc + delphi modes). Identifiers
-  coming from the C source that collide get prefixed with '&', the
-  FPC escape that yields a legal identifier with the same surface
-  spelling. Lowercased before comparison since Pascal is
-  case-insensitive but the table only stores the canonical form. }
+  coming from the C source that collide get a '_' suffix — a
+  legal identifier that is portable across Pascal dialects (Blaise
+  has no '&' escape, so the same convention works for both).
+  Lowercased before comparison since Pascal is case-insensitive
+  but the table only stores the canonical form. }
 const
   FPC_RESERVED: array[0..67] of string = (
     'absolute','and','array','as','asm','begin','case','class',
@@ -109,7 +110,7 @@ begin
   for I := Low(FPC_RESERVED) to High(FPC_RESERVED) do
     if Lower = FPC_RESERVED[I] then
     begin
-      Result := '&' + S;
+      Result := S + '_';
       Exit;
     end;
   Result := S;
