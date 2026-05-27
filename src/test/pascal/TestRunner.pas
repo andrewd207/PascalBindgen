@@ -19,10 +19,16 @@ type
   private
     function SampleHeader: string;
     function Parse: TBindingUnit;
+    function FindByName(U: TBindingUnit; const N: string): TBindingDecl;
   published
     procedure ExtractsExpectedTopLevelDecls;
     procedure FiltersOutSystemHeaderDecls;
     procedure CapturesDoxygenCommentVerbatim;
+    procedure FunctionAddHasIntReturnAndTwoIntParams;
+    procedure FunctionGreetHasConstCharPointerParam;
+    procedure StructPointHasTwoIntFields;
+    procedure EnumColorHasThreeConsecutiveConstants;
+    procedure TypedefMyIntAliasesInt;
   end;
 
   TClangTypeTests = class(TTestCase)
@@ -188,6 +194,115 @@ begin
     AssertNotNull('struct Point present', PointStruct);
     AssertTrue('struct Point has its /** */ doc comment',
                Pos('A point on a 2D grid', PointStruct.RawComment) > 0);
+  finally
+    U.Free;
+  end;
+end;
+
+function TParserTests.FindByName(U: TBindingUnit; const N: string): TBindingDecl;
+var
+  I: Integer;
+begin
+  for I := 0 to U.Decls.Count - 1 do
+    if U.Decls[I].Name = N then
+    begin
+      Result := U.Decls[I];
+      Exit;
+    end;
+  Result := nil;
+end;
+
+procedure TParserTests.FunctionAddHasIntReturnAndTwoIntParams;
+var
+  U: TBindingUnit;
+  F: TBindingFunction;
+begin
+  U := Parse;
+  try
+    F := TBindingFunction(FindByName(U, 'add'));
+    AssertNotNull('add present', F);
+    AssertNotNull('add has a return type', F.ReturnType);
+    AssertEquals('add returns int', 'int', F.ReturnType.Spelling);
+    AssertEquals('add takes 2 params', 2, F.Params.Count);
+    AssertEquals('first param named a', 'a', F.Params[0].Name);
+    AssertEquals('second param named b', 'b', F.Params[1].Name);
+    AssertEquals('first param type int', 'int', F.Params[0].ParamType.Spelling);
+    AssertFalse('add is not variadic', F.IsVarArgs);
+  finally
+    U.Free;
+  end;
+end;
+
+procedure TParserTests.FunctionGreetHasConstCharPointerParam;
+var
+  U: TBindingUnit;
+  F: TBindingFunction;
+  PT: TBindingType;
+begin
+  U := Parse;
+  try
+    F := TBindingFunction(FindByName(U, 'greet'));
+    AssertNotNull('greet present', F);
+    AssertEquals('one param', 1, F.Params.Count);
+    PT := F.Params[0].ParamType;
+    AssertEquals('param is pointer', Ord(tkPointer), Ord(PT.Kind));
+    AssertNotNull('pointer has pointee', PT.Pointee);
+    AssertTrue('pointee is const-qualified char',
+               Pos('char', PT.Pointee.Spelling) > 0);
+  finally
+    U.Free;
+  end;
+end;
+
+procedure TParserTests.StructPointHasTwoIntFields;
+var
+  U: TBindingUnit;
+  R: TBindingRecord;
+begin
+  U := Parse;
+  try
+    R := TBindingRecord(FindByName(U, 'Point'));
+    AssertNotNull('Point struct present', R);
+    AssertFalse('Point is not a union', R.IsUnion);
+    AssertEquals('two fields', 2, R.Fields.Count);
+    AssertEquals('first field is x', 'x', R.Fields[0].Name);
+    AssertEquals('second field is y', 'y', R.Fields[1].Name);
+    AssertEquals('x is int', 'int', R.Fields[0].FieldType.Spelling);
+  finally
+    U.Free;
+  end;
+end;
+
+procedure TParserTests.EnumColorHasThreeConsecutiveConstants;
+var
+  U: TBindingUnit;
+  E: TBindingEnum;
+begin
+  U := Parse;
+  try
+    E := TBindingEnum(FindByName(U, 'Color'));
+    AssertNotNull('Color enum present', E);
+    AssertEquals('three constants', 3, E.Constants.Count);
+    AssertEquals('RED', 'RED', E.Constants[0].Name);
+    AssertEquals('RED=0', 0, E.Constants[0].Value);
+    AssertEquals('GREEN=1', 1, E.Constants[1].Value);
+    AssertEquals('BLUE=2', 2, E.Constants[2].Value);
+  finally
+    U.Free;
+  end;
+end;
+
+procedure TParserTests.TypedefMyIntAliasesInt;
+var
+  U: TBindingUnit;
+  T: TBindingTypedef;
+begin
+  U := Parse;
+  try
+    T := TBindingTypedef(FindByName(U, 'my_int_t'));
+    AssertNotNull('typedef present', T);
+    AssertNotNull('aliased type set', T.Aliased);
+    AssertEquals('aliases int', 'int', T.Aliased.Spelling);
   finally
     U.Free;
   end;

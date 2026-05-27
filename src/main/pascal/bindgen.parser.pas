@@ -44,29 +44,174 @@ begin
   D.RawComment := C.RawComment;
 end;
 
+{ Translate a TClangType into the dialect-neutral TBindingType. The
+  input is borrowed; result is heap-allocated and owned by the caller. }
+function BuildType(T: TClangType): TBindingType;
+var
+  K: Integer;
+  Spelling: string;
+  Sub: TClangType;
+begin
+  K := T.Kind;
+  Spelling := T.Spelling;
+  if K = TClangTypeKinds.Pointer_ then
+  begin
+    Result := TBindingType.Create(tkPointer, Spelling);
+    Sub := T.Pointee;
+    try
+      Result.Pointee := BuildType(Sub);
+    finally
+      Sub.Free;
+    end;
+  end
+  else if (K = TClangTypeKinds.ConstantArray) or
+          (K = TClangTypeKinds.IncompleteArray) then
+  begin
+    Result := TBindingType.Create(tkArray, Spelling);
+    if K = TClangTypeKinds.ConstantArray then
+      Result.ArraySize := T.ArraySize
+    else
+      Result.ArraySize := -1;
+    Sub := T.ArrayElement;
+    try
+      Result.Pointee := BuildType(Sub);
+    finally
+      Sub.Free;
+    end;
+  end
+  else if K = TClangTypeKinds.Record_ then
+    Result := TBindingType.Create(tkRecordRef, Spelling)
+  else if K = TClangTypeKinds.Enum then
+    Result := TBindingType.Create(tkEnumRef, Spelling)
+  else if K = TClangTypeKinds.Typedef then
+    Result := TBindingType.Create(tkTypedefRef, Spelling)
+  else if K = TClangTypeKinds.Elaborated then
+  begin
+    { "struct Foo" / "enum Bar" form — unwrap to the underlying ref. }
+    Sub := T.Canonical;
+    try
+      Result := BuildType(Sub);
+      Result.Spelling := Spelling;  { preserve original spelling }
+    finally
+      Sub.Free;
+    end;
+  end
+  else
+    Result := TBindingType.Create(tkPrimitive, Spelling);
+end;
+
 function BuildFunction(C: TClangCursor): TBindingFunction;
+var
+  FT, RT, AT: TClangType;
+  Kids: TClangCursorArray;
+  I, ParamIdx: Integer;
+  Param: TBindingParam;
 begin
   Result := TBindingFunction.Create(C.Spelling, CursorLoc(C));
-  Result.CallingConv := ccCdecl;  { default; will refine when CXType shim lands }
+  Result.CallingConv := ccCdecl;  { refine when CXCallingConv shim lands }
   AttachComment(Result, C);
+  FT := C.TypeOf;
+  try
+    RT := FT.ResultType;
+    try
+      Result.ReturnType := BuildType(RT);
+    finally
+      RT.Free;
+    end;
+    Result.IsVarArgs := FT.IsVariadic;
+    { Param *names* come from ParmDecl children; param *types* come from
+      FT.Arg(i) so anonymous params still get typed. }
+    Kids := C.Children;
+    try
+      ParamIdx := 0;
+      for I := 0 to High(Kids) do
+        if Kids[I].Kind = TClangKinds.ParmDecl then
+        begin
+          AT := FT.Arg(ParamIdx);
+          try
+            Param := TBindingParam.Create(
+              Kids[I].Spelling,
+              BuildType(AT),
+              AT.IsConstQualified);
+          finally
+            AT.Free;
+          end;
+          Result.Params.Add(Param);
+          Inc(ParamIdx);
+        end;
+    finally
+      for I := 0 to High(Kids) do Kids[I].Free;
+    end;
+  finally
+    FT.Free;
+  end;
 end;
 
 function BuildTypedef(C: TClangCursor): TBindingTypedef;
+var
+  UT: TClangType;
 begin
   Result := TBindingTypedef.Create(C.Spelling, CursorLoc(C));
   AttachComment(Result, C);
+  UT := C.TypedefUnderlying;
+  try
+    Result.Aliased := BuildType(UT);
+  finally
+    UT.Free;
+  end;
 end;
 
 function BuildRecord(C: TClangCursor; IsUnion: Boolean): TBindingRecord;
+var
+  Kids: TClangCursorArray;
+  I: Integer;
+  FT: TClangType;
+  Field: TBindingField;
 begin
   Result := TBindingRecord.Create(C.Spelling, CursorLoc(C), IsUnion);
   AttachComment(Result, C);
+  Kids := C.Children;
+  try
+    for I := 0 to High(Kids) do
+      if Kids[I].Kind = TClangKinds.FieldDecl then
+      begin
+        FT := Kids[I].TypeOf;
+        try
+          Field := TBindingField.Create(Kids[I].Spelling, BuildType(FT));
+        finally
+          FT.Free;
+        end;
+        Field.BitWidth := Kids[I].FieldBitWidth;
+        Result.Fields.Add(Field);
+      end;
+  finally
+    for I := 0 to High(Kids) do Kids[I].Free;
+  end;
 end;
 
 function BuildEnum(C: TClangCursor): TBindingEnum;
+var
+  IT: TClangType;
+  Kids: TClangCursorArray;
+  I: Integer;
 begin
   Result := TBindingEnum.Create(C.Spelling, CursorLoc(C));
   AttachComment(Result, C);
+  IT := C.EnumIntegerType;
+  try
+    Result.UnderlyingType := BuildType(IT);
+  finally
+    IT.Free;
+  end;
+  Kids := C.Children;
+  try
+    for I := 0 to High(Kids) do
+      if Kids[I].Kind = TClangKinds.EnumConstant then
+        Result.Constants.Add(TBindingEnumConst.Create(
+          Kids[I].Spelling, Kids[I].EnumConstantValue));
+  finally
+    for I := 0 to High(Kids) do Kids[I].Free;
+  end;
 end;
 
 class function TBindgenParser.ParseHeader(const HeaderPath: string;
