@@ -658,7 +658,7 @@ begin
   try
     Root := TU.RootCursor;
     try
-      Kids := Root.Children;
+      Kids := CursorChildren(Root);
       try
         for I := 0 to High(Kids) do
           if (Kids[I].Kind = Kind) and (Kids[I].Spelling = Spelling) then

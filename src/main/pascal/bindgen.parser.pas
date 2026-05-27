@@ -124,7 +124,7 @@ begin
     Result.IsVarArgs := FT.IsVariadic;
     { Param *names* come from ParmDecl children; param *types* come from
       FT.Arg(i) so anonymous params still get typed. }
-    Kids := C.Children;
+    Kids := CursorChildren(C);
     try
       ParamIdx := 0;
       for I := 0 to High(Kids) do
@@ -174,7 +174,7 @@ var
 begin
   Result := TBindingRecord.Create(C.Spelling, CursorLoc(C), IsUnion);
   AttachComment(Result, C);
-  Kids := C.Children;
+  Kids := CursorChildren(C);
   try
     for I := 0 to High(Kids) do
       if Kids[I].Kind = TClangKinds.FieldDecl then
@@ -208,7 +208,7 @@ begin
   finally
     IT.Free;
   end;
-  Kids := C.Children;
+  Kids := CursorChildren(C);
   try
     for I := 0 to High(Kids) do
       if Kids[I].Kind = TClangKinds.EnumConstant then
@@ -239,7 +239,7 @@ begin
     try
       Root := TU.RootCursor;
       try
-        Children := Root.Children;
+        Children := CursorChildren(Root);
         try
           for I := 0 to High(Children) do
           begin

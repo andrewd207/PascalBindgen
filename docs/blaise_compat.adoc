@@ -45,6 +45,9 @@ linked in.
 | `class function` / `class procedure` | OK with `static;` qualifier           | Not yet parsed (`Expected 'end' in class definition`); use a plain unit-level function
 | `const` parameter qualifier          | Supported                             | Not supported — drop the keyword (caller still passes by value)
 | `FItems[N] := Item;` (writing to array-of-T class field) | OK | Semantic error "Undeclared variable 'FItems'" — see repro below
+| `array of const` (e.g. `Format('%d', [x])`, `Exception.CreateFmt`) | Supported via `TVarRec` | Not yet — `Semantic error: Array literal element N has type 'string'; expected 'Integer'`. Workaround: concat with `IntToStr`/`FloatToStr`.
+| `@OutOrVarParam` (taking address of a `var`/`out` parameter) | OK | `Code generation error: Unsupported L-value form for var argument`. Workaround: stage through a local, then assign back.
+| `@dynArr[0]` (address of dyn-array element)               | OK | Same codegen error. Workaround: `Pointer(arr)` gives the base pointer.
 |===
 
 .Minimal repro for the array-field-assignment issue:
