@@ -67,19 +67,25 @@ begin
 end;
 
 var
-  HeaderPath: string = '';
-  OutputPath: string = '';
-  UnitName: string = '';
-  LibraryName: string = '';
-  Dialect: string = '';
+  HeaderPath: string;
+  OutputPath: string;
+  UnitName: string;
+  LibraryName: string;
+  Dialect: string;
   ExtraArgs: array of string;
   I: Integer;
-  PastDD: Boolean = False;
+  PastDD: Boolean;
   U: TBindingUnit;
   FpcEmitter: TFpcEmitter;
   BlaiseEmitter: TBlaiseEmitter;
   Arg: string;
 begin
+  HeaderPath := '';
+  OutputPath := '';
+  UnitName := '';
+  LibraryName := '';
+  Dialect := '';
+  PastDD := False;
   SetLength(ExtraArgs, 0);
   I := 1;
   while I <= ParamCount do
@@ -126,7 +132,7 @@ begin
   end;
   if HeaderPath = '' then Usage;
 
-  U := TBindgenParser.ParseHeader(HeaderPath, ExtraArgs);
+  U := ParseHeader(HeaderPath, ExtraArgs);
   try
     if Dialect = 'fpc' then
     begin

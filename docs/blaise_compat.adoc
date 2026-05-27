@@ -42,6 +42,8 @@ linked in.
 | `{$modeswitch advancedrecords}`      | Required for records-with-methods     | Records with methods accepted natively
 | `var X: T = default` initializer     | Supported                             | Parse error — initialize in `begin` body instead
 | `arr[I].MethodCall`                  | OK                                    | Parse error; assign to a local first: `obj := arr[I]; obj.Method;`
+| `class function` / `class procedure` | OK with `static;` qualifier           | Not yet parsed (`Expected 'end' in class definition`); use a plain unit-level function
+| `const` parameter qualifier          | Supported                             | Not supported — drop the keyword (caller still passes by value)
 | `FItems[N] := Item;` (writing to array-of-T class field) | OK | Semantic error "Undeclared variable 'FItems'" — see repro below
 |===
 

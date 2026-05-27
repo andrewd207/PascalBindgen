@@ -11,22 +11,24 @@
     DetailedPreprocessingRecord so they don't show up here anyway. }
 unit bindgen.parser;
 
-{$mode objfpc}{$H+}
+{$IFDEF FPC}
+{$mode delphi}{$H+}
+{$ENDIF}
 
 interface
 
 uses
   Classes, SysUtils, clang.wrap, bindgen.ir;
 
-type
-  TBindgenParser = class
-  public
-    { Parse a header into a fresh TBindingUnit. ExtraArgs are clang
-      command-line args (`-I...`, `-D...`, etc.). Caller owns the
-      result and must Free it. }
-    class function ParseHeader(const HeaderPath: string;
-                               const ExtraArgs: array of string): TBindingUnit;
-  end;
+{ Parse a header into a fresh TBindingUnit. ExtraArgs are clang
+  command-line args (`-I...`, `-D...`, etc.). Caller owns the
+  result and must Free it.
+
+  Plain function rather than a `class function` on a holder type
+  because Blaise does not yet parse `class function` / `class
+  procedure`. }
+function ParseHeader(const HeaderPath: string;
+                     const ExtraArgs: array of string): TBindingUnit;
 
 implementation
 
@@ -104,6 +106,7 @@ function BuildFunction(C: TClangCursor): TBindingFunction;
 var
   FT, RT, AT: TClangType;
   Kids: TClangCursorArray;
+  K: TClangCursor;
   I, ParamIdx: Integer;
   Param: TBindingParam;
 begin
@@ -140,7 +143,7 @@ begin
           Inc(ParamIdx);
         end;
     finally
-      for I := 0 to High(Kids) do Kids[I].Free;
+      for I := 0 to High(Kids) do begin K := Kids[I]; K.Free; end;
     end;
   finally
     FT.Free;
@@ -164,6 +167,7 @@ end;
 function BuildRecord(C: TClangCursor; IsUnion: Boolean): TBindingRecord;
 var
   Kids: TClangCursorArray;
+  K: TClangCursor;
   I: Integer;
   FT: TClangType;
   Field: TBindingField;
@@ -185,7 +189,7 @@ begin
         Result.Fields.Add(Field);
       end;
   finally
-    for I := 0 to High(Kids) do Kids[I].Free;
+    for I := 0 to High(Kids) do begin K := Kids[I]; K.Free; end;
   end;
 end;
 
@@ -193,6 +197,7 @@ function BuildEnum(C: TClangCursor): TBindingEnum;
 var
   IT: TClangType;
   Kids: TClangCursorArray;
+  K: TClangCursor;
   I: Integer;
 begin
   Result := TBindingEnum.Create(C.Spelling, CursorLoc(C));
@@ -210,11 +215,11 @@ begin
         Result.Constants.Add(TBindingEnumConst.Create(
           Kids[I].Spelling, Kids[I].EnumConstantValue));
   finally
-    for I := 0 to High(Kids) do Kids[I].Free;
+    for I := 0 to High(Kids) do begin K := Kids[I]; K.Free; end;
   end;
 end;
 
-class function TBindgenParser.ParseHeader(const HeaderPath: string;
+function ParseHeader(const HeaderPath: string;
                                           const ExtraArgs: array of string): TBindingUnit;
 var
   Idx: TClangIndex;
@@ -257,8 +262,8 @@ begin
             Result.Decls.Add(Decl);
           end;
         finally
-          for I := 0 to High(Children) do
-            Children[I].Free;
+          for I := 0 to High(Children) do begin
+            Child := Children[I]; Child.Free; end;
         end;
       finally
         Root.Free;

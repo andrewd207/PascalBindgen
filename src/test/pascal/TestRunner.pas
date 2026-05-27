@@ -151,7 +151,7 @@ end;
 
 function TParserTests.Parse: TBindingUnit;
 begin
-  Result := TBindgenParser.ParseHeader(SampleHeader, []);
+  Result := ParseHeader(SampleHeader, []);
 end;
 
 procedure TParserTests.ExtractsExpectedTopLevelDecls;
@@ -365,7 +365,7 @@ var
   U: TBindingUnit;
   E: TFpcEmitter;
 begin
-  U := TBindgenParser.ParseHeader(SampleHeader, []);
+  U := ParseHeader(SampleHeader, []);
   try
     E := TFpcEmitter.Create('sample', 'libsample');
     try
@@ -446,7 +446,7 @@ begin
   with TFileStream.Create(TmpH, fmCreate) do
     try Write(Snippet[1], Length(Snippet)); finally Free; end;
   try
-    U := TBindgenParser.ParseHeader(TmpH, []);
+    U := ParseHeader(TmpH, []);
     try
       E := TFpcEmitter.Create('vd', 'libvd');
       try
@@ -530,7 +530,7 @@ var
   U: TBindingUnit;
   E: TBlaiseEmitter;
 begin
-  U := TBindgenParser.ParseHeader(SampleHeader, []);
+  U := ParseHeader(SampleHeader, []);
   try
     E := TBlaiseEmitter.Create('sample', 'libsample');
     try
