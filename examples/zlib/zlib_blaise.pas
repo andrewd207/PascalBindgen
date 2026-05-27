@@ -8,6 +8,18 @@ unit zlib;
 interface
 
 type
+  z_size_t = size_t;  { zconf.h:255 }
+  uInt = Cardinal;  { zconf.h:403 }
+  uLong = UInt64;  { zconf.h:404 }
+  Bytef = Byte;  { zconf.h:410 }
+  charf = AnsiChar;  { zconf.h:412 }
+  intf = Integer;  { zconf.h:413 }
+  uIntf = uInt;  { zconf.h:414 }
+  uLongf = uLong;  { zconf.h:415 }
+  voidpc = Pointer;  { zconf.h:418 }
+  voidpf = Pointer;  { zconf.h:419 }
+  voidp = Pointer;  { zconf.h:420 }
+  z_crc_t = Cardinal;  { zconf.h:439 }
   alloc_func = ^voidpf (voidpf, uInt, uInt);  { zlib.h:81 }
   free_func = ^void (voidpf, voidpf);  { zlib.h:82 }
   internal_state = record  { zlib.h:84 }

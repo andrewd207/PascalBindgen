@@ -2,8 +2,11 @@
 
   Scope of this first pass
   ------------------------
-  * Only top-level decls whose location is in the main header
-    (clang_Location_isFromMainFile) — no system-header leakage.
+  * Top-level decls from the main header *and* any user-side
+    #include — anything libclang does NOT classify as a system
+    header (clang_Location_isInSystemHeader). This is wider than
+    the original main-file-only filter so that real-world headers
+    like zlib.h pull in their zconf.h typedef vocabulary.
   * Functions, typedefs, structs/unions, enums. No fields-of-structs,
     no enum-constant values, no type info beyond a spelling placeholder
     yet — those land in follow-on passes once the shim exposes CXType.
@@ -244,7 +247,7 @@ begin
         for I := 0 to High(Children) do
         begin
           Child := Children[I];
-          if not Child.InMainFile then Continue;
+          if Child.InSystemHeader then Continue;
           K := Child.Kind;
           Decl := nil;
           if K = TClangKinds.FunctionDecl then

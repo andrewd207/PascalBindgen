@@ -83,6 +83,7 @@ type
     procedure StructPointHasTwoIntFields;
     procedure EnumColorHasThreeConsecutiveConstants;
     procedure TypedefMyIntAliasesInt;
+    procedure UserIncludeDeclsAreEmittedSystemHeadersAreNot;
   end;
 
   TFpcEmitTests = class(TTestCase)
@@ -387,6 +388,51 @@ begin
     AssertNotNull('typedef present', T);
     AssertNotNull('aliased type set', T.Aliased);
     AssertEquals('aliases int', 'int', T.Aliased.Spelling);
+  finally
+    U.Free;
+  end;
+end;
+
+procedure TParserTests.UserIncludeDeclsAreEmittedSystemHeadersAreNot;
+{ Confirms the parser admits decls from user #includes (sample_include.h)
+  while still skipping system headers (<stddef.h> in this case).
+  Regression for the gap zlib surfaced — its zconf.h types used to
+  vanish under the old main-file-only filter. }
+const
+  Candidates: array[0..3] of string = (
+    'sample_with_include.h',
+    'src/test/resources/sample_with_include.h',
+    '../src/test/resources/sample_with_include.h',
+    '../../src/test/resources/sample_with_include.h'
+  );
+var
+  Header: string;
+  I: Integer;
+  U: TBindingUnit;
+  D: TBindingDecl;
+  SawUserInclude, SawMainFile, AnySystemLeak: Boolean;
+begin
+  Header := Candidates[0];
+  for I := Low(Candidates) to High(Candidates) do
+    if FileExists(Candidates[I]) then begin Header := Candidates[I]; Break; end;
+
+  U := ParseHeader(Header);
+  try
+    SawUserInclude := False; SawMainFile := False; AnySystemLeak := False;
+    for I := 0 to U.Decls.Count - 1 do
+    begin
+      D := U.Decls.Items[I];
+      if D.Name = 'UserIncluded' then SawUserInclude := True;
+      if D.Name = 'main_file_func' then SawMainFile := True;
+      { System-header leak would show as e.g. ptrdiff_t / NULL / size_t.
+        Looser check: the location filename must contain "sample" — both
+        sample_with_include.h and sample_include.h match. }
+      if Pos('sample', D.Location.FileName) = 0 then
+        AnySystemLeak := True;
+    end;
+    AssertTrue('user-include decl UserIncluded present',     SawUserInclude);
+    AssertTrue('main-file decl main_file_func present',      SawMainFile);
+    AssertFalse('no leak from system headers like stddef.h', AnySystemLeak);
   finally
     U.Free;
   end;

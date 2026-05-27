@@ -45,6 +45,7 @@ function pbg_kind_spelling(kind: cint): PChar; {$IFDEF FPC}cdecl; {$ENDIF}extern
 procedure pbg_cursor_location(p: PPbgCursor; out_file: PPChar; out_line, out_col: PCardinal); {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_cursor_location';
 
 function pbg_cursor_in_main_file(p: PPbgCursor): cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_cursor_in_main_file';
+function pbg_cursor_in_system_header(p: PPbgCursor): cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_cursor_in_system_header';
 function pbg_cursor_raw_comment(p: PPbgCursor): PChar; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_cursor_raw_comment';
 
 { stable cursor-kind constants (queried at runtime, not hardcoded) }

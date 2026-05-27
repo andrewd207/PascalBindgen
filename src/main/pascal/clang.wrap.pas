@@ -56,6 +56,7 @@ type
     function KindSpelling: string;
     function Spelling: string;
     function InMainFile: Boolean;
+    function InSystemHeader: Boolean;
     function RawComment: string;
     function TypeOf: TClangType;
     function TypedefUnderlying: TClangType;
@@ -303,6 +304,11 @@ end;
 function TClangCursor.InMainFile: Boolean;
 begin
   Result := pbg_cursor_in_main_file(FHandle) <> 0;
+end;
+
+function TClangCursor.InSystemHeader: Boolean;
+begin
+  Result := pbg_cursor_in_system_header(FHandle) <> 0;
 end;
 
 function TClangCursor.TypeOf: TClangType;

@@ -30,21 +30,22 @@ Two things at the same time:
 These are the v1 limitations zlib exposes, in roughly the order
 they trip up `fpc -Cn examples/zlib/zlib_fpc.pas`:
 
-=== 1. Typedefs from `#include`d headers are dropped
+=== 1. Typedefs from `#include`d headers are dropped (FIXED)
 
-zlib defines its public typedefs (`voidpf`, `uInt`, `Bytef`, `uLong`,
-`gzFile`, `z_off_t`, `z_size_t`, `z_streamp` ...) in `zconf.h`,
-which `zlib.h` includes. Names from `<sys/types.h>` such as `off_t`
-arrive the same way. The parser's `clang_Location_isFromMainFile`
-filter drops every cursor that came from one of those files.
+*Status: fixed (commit landed after the initial README write).*
 
-Effect: the generated bindings reference these names without ever
-declaring them.
+The parser now uses `clang_Location_isInSystemHeader` as the
+exclusion filter instead of `clang_Location_isFromMainFile`. Decls
+that arrive via a user-side `#include` (zlib's `zconf.h`) now flow
+through; decls from `<>`-style system includes (`<stddef.h>`,
+`<stdio.h>`) still get dropped. The regenerated `zlib_fpc.pas`
+contains the full vocabulary: `Bytef`, `uInt`, `uLong`, `voidpf`,
+etc.
 
-Fix path: relax the location filter from "main file only" to
-"non-system header" — admit anything libclang resolves under a
-non-`<>` include path, while still skipping `<stdio.h>` / `<stddef.h>`
-and the like.
+A few system-typedef use sites still leak via gap §4 — e.g.
+`z_size_t = size_t;` references `size_t` which lives in `<stddef.h>`
+and is therefore not declared. Resolving §4 (typedef-chain
+unwrapping) maps these to canonical primitives at the use site.
 
 === 2. Function-pointer typedefs render to garbage
 

@@ -154,6 +154,15 @@ int pbg_cursor_in_main_file(PbgCursor* p) {
     return clang_Location_isFromMainFile(loc) ? 1 : 0;
 }
 
+/* Returns 1 if this cursor's location is inside a system header
+ * (anything libclang resolves under a -isystem / <>-include path),
+ * 0 otherwise. Used by the parser to admit user-include typedefs
+ * like zlib's zconf.h while still skipping <stddef.h>, <stdio.h>. */
+int pbg_cursor_in_system_header(PbgCursor* p) {
+    CXSourceLocation loc = clang_getCursorLocation(p->c);
+    return clang_Location_isInSystemHeader(loc) ? 1 : 0;
+}
+
 /* Raw doc comment text attached to this cursor (Doxygen / //! / star-star block).
  * NULL when there is no attached comment. Caller frees via pbg_free_string. */
 const char* pbg_cursor_raw_comment(PbgCursor* p) {
