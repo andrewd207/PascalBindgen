@@ -12,7 +12,27 @@ uses
   blaise.testing, blaise.testing.runner.text,
   {$ENDIF}
   bindgen.ir, bindgen.parser, bindgen.emit.fpc, bindgen.emit.blaise,
-  bindgen.blob, clang.wrap;
+  bindgen.blob, clang.wrap, process;
+
+{ Run a shell command, wait, return its exit code. Both FPC and
+  Blaise expose TProcess with the same surface, so this stays
+  IFDEF-free. }
+function RunShell(Cmd: string): Integer;
+var
+  P: TProcess;
+begin
+  P := TProcess.Create(nil);
+  try
+    P.Executable := '/bin/sh';
+    P.Parameters.Add('-c');
+    P.Parameters.Add(Cmd);
+    P.Execute;
+    P.WaitOnExit;
+    Result := P.ExitCode;
+  finally
+    P.Free;
+  end;
+end;
 
 procedure WriteSnippet(Path, Content: string);
 var
@@ -517,7 +537,7 @@ begin
   try
     { -Cn  produces .o only (no link). Plenty for syntactic verification. }
     Cmd := Format('fpc -Cn -O- %s > %s 2>&1', [PasFile, OutFile]);
-    RC := ExecuteProcess('/bin/sh', ['-c', Cmd]);
+    RC := RunShell(Cmd);
     if RC <> 0 then
     begin
       Writeln('--- fpc output ---');
@@ -652,7 +672,7 @@ begin
       acceptable to Blaise as a standalone unit. }
     Cmd := Format('%s --source %s --emit-ir > %s 2>&1',
                   [BlaiseBin, PasFile, OutFile]);
-    RC := ExecuteProcess('/bin/sh', ['-c', Cmd]);
+    RC := RunShell(Cmd);
     if RC <> 0 then
     begin
       Writeln('--- blaise output ---');
@@ -679,7 +699,7 @@ var
   I: Integer;
 begin
   Result := nil;
-  TU := Idx.Parse(Header, []);
+  TU := Idx.ParseNoArgs(Header);
   try
     Root := TU.RootCursor;
     try
