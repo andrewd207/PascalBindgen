@@ -3,7 +3,7 @@ program Main;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, bindgen.ir, bindgen.parser;
+  SysUtils, bindgen.ir, bindgen.parser, bindgen.emit.fpc;
 
 const
   Version = '1.0.0';
@@ -32,33 +32,95 @@ end;
 procedure Usage;
 begin
   WriteLn('pascal_bindgen ', Version);
-  WriteLn('usage: pascal_bindgen --header <file.h> [-- <clang args...>]');
+  WriteLn('usage: pascal_bindgen [--fpc] --header <file.h> [--output <file.pas>]');
+  WriteLn('                      [--unit-name <name>] [--library <name>]');
+  WriteLn('                      [-- <clang args...>]');
+  WriteLn('  With no dialect flag the parser dumps top-level decls for debugging.');
   Halt(2);
+end;
+
+procedure WriteAllText(const Path, Text: string);
+var
+  F: TextFile;
+begin
+  if Path = '-' then
+    Write(Text)
+  else
+  begin
+    AssignFile(F, Path);
+    Rewrite(F);
+    try
+      Write(F, Text);
+    finally
+      CloseFile(F);
+    end;
+  end;
+end;
+
+function DeriveUnitName(const OutputPath, HeaderPath: string): string;
+begin
+  if OutputPath <> '' then
+    Result := ChangeFileExt(ExtractFileName(OutputPath), '')
+  else
+    Result := ChangeFileExt(ExtractFileName(HeaderPath), '');
+  if Result = '' then Result := 'bindings';
 end;
 
 var
   HeaderPath: string = '';
+  OutputPath: string = '';
+  UnitName: string = '';
+  LibraryName: string = '';
+  Dialect: string = '';
   ExtraArgs: array of string;
   I: Integer;
   PastDD: Boolean = False;
   U: TBindingUnit;
+  Emitter: TFpcEmitter;
+  Arg: string;
 begin
   SetLength(ExtraArgs, 0);
   I := 1;
   while I <= ParamCount do
   begin
+    Arg := ParamStr(I);
     if PastDD then
     begin
       SetLength(ExtraArgs, Length(ExtraArgs) + 1);
-      ExtraArgs[High(ExtraArgs)] := ParamStr(I);
+      ExtraArgs[High(ExtraArgs)] := Arg;
     end
-    else if ParamStr(I) = '--header' then
+    else if Arg = '--header' then
     begin
       Inc(I);
       if I > ParamCount then Usage;
       HeaderPath := ParamStr(I);
     end
-    else if ParamStr(I) = '--' then
+    else if Arg = '--output' then
+    begin
+      Inc(I);
+      if I > ParamCount then Usage;
+      OutputPath := ParamStr(I);
+    end
+    else if Arg = '--unit-name' then
+    begin
+      Inc(I);
+      if I > ParamCount then Usage;
+      UnitName := ParamStr(I);
+    end
+    else if Arg = '--library' then
+    begin
+      Inc(I);
+      if I > ParamCount then Usage;
+      LibraryName := ParamStr(I);
+    end
+    else if Arg = '--fpc' then
+      Dialect := 'fpc'
+    else if Arg = '--blaise' then
+    begin
+      WriteLn(StdErr, 'pascal_bindgen: --blaise emitter not implemented yet');
+      Halt(2);
+    end
+    else if Arg = '--' then
       PastDD := True
     else
       Usage;
@@ -68,7 +130,19 @@ begin
 
   U := TBindgenParser.ParseHeader(HeaderPath, ExtraArgs);
   try
-    DumpUnit(U);
+    if Dialect = 'fpc' then
+    begin
+      if UnitName = '' then UnitName := DeriveUnitName(OutputPath, HeaderPath);
+      Emitter := TFpcEmitter.Create(UnitName, LibraryName);
+      try
+        if OutputPath = '' then OutputPath := '-';
+        WriteAllText(OutputPath, Emitter.Emit(U));
+      finally
+        Emitter.Free;
+      end;
+    end
+    else
+      DumpUnit(U);
   finally
     U.Free;
   end;

@@ -4,7 +4,7 @@ program TestRunner;
 
 uses
   Classes, SysUtils, fpcunit, testregistry, consoletestrunner,
-  bindgen.ir, bindgen.parser, clang.wrap;
+  bindgen.ir, bindgen.parser, bindgen.emit.fpc, clang.wrap;
 
 type
   TIRTests = class(TTestCase)
@@ -29,6 +29,22 @@ type
     procedure StructPointHasTwoIntFields;
     procedure EnumColorHasThreeConsecutiveConstants;
     procedure TypedefMyIntAliasesInt;
+  end;
+
+  TFpcEmitTests = class(TTestCase)
+  private
+    function SampleHeader: string;
+    function EmitSample: string;
+  published
+    procedure HasProvenanceHeader;
+    procedure DeclaresUnitAndUsesCtypes;
+    procedure FunctionAddBecomesCdeclExternal;
+    procedure StructPointHasIntFields;
+    procedure UnionValueUsesRecordCase;
+    procedure EnumColorEmitsTypeAndConstants;
+    procedure VariadicEmitsVarargsModifier;
+    procedure ConstCharPointerBecomesPAnsiChar;
+    procedure EmittedSourceCompilesUnderFpc;
   end;
 
   TClangTypeTests = class(TTestCase)
@@ -308,6 +324,176 @@ begin
   end;
 end;
 
+{ TFpcEmitTests }
+
+function TFpcEmitTests.SampleHeader: string;
+const
+  Candidates: array[0..3] of string = (
+    'sample.h',
+    'src/test/resources/sample.h',
+    '../src/test/resources/sample.h',
+    '../../src/test/resources/sample.h'
+  );
+var
+  I: Integer;
+begin
+  for I := Low(Candidates) to High(Candidates) do
+    if FileExists(Candidates[I]) then
+    begin
+      Result := Candidates[I];
+      Exit;
+    end;
+  Result := Candidates[0];
+end;
+
+function TFpcEmitTests.EmitSample: string;
+var
+  U: TBindingUnit;
+  E: TFpcEmitter;
+begin
+  U := TBindgenParser.ParseHeader(SampleHeader, []);
+  try
+    E := TFpcEmitter.Create('sample', 'libsample');
+    try
+      Result := E.Emit(U);
+    finally
+      E.Free;
+    end;
+  finally
+    U.Free;
+  end;
+end;
+
+procedure TFpcEmitTests.HasProvenanceHeader;
+var S: string;
+begin
+  S := EmitSample;
+  AssertTrue('DO NOT EDIT banner', Pos('DO NOT EDIT', S) > 0);
+  AssertTrue('source line names sample.h', Pos('sample.h', S) > 0);
+end;
+
+procedure TFpcEmitTests.DeclaresUnitAndUsesCtypes;
+var S: string;
+begin
+  S := EmitSample;
+  AssertTrue('unit sample;', Pos('unit sample;', S) > 0);
+  AssertTrue('PACKRECORDS C', Pos('{$PACKRECORDS C}', S) > 0);
+  AssertTrue('uses ctypes',  Pos('ctypes', S) > 0);
+end;
+
+procedure TFpcEmitTests.FunctionAddBecomesCdeclExternal;
+var S: string;
+begin
+  S := EmitSample;
+  AssertTrue('add signature present',
+             Pos('function add(a: cint; b: cint): cint;', S) > 0);
+  AssertTrue('cdecl modifier',  Pos('cdecl', S) > 0);
+  AssertTrue('external libsample name ''add''',
+             Pos('external ''libsample'' name ''add''', S) > 0);
+end;
+
+procedure TFpcEmitTests.StructPointHasIntFields;
+var S: string;
+begin
+  S := EmitSample;
+  AssertTrue('record opener', Pos('Point = record', S) > 0);
+  AssertTrue('field x: cint', Pos('x: cint;', S) > 0);
+  AssertTrue('field y: cint', Pos('y: cint;', S) > 0);
+end;
+
+procedure TFpcEmitTests.UnionValueUsesRecordCase;
+var S: string;
+begin
+  S := EmitSample;
+  AssertTrue('Value record opener',     Pos('Value = record', S) > 0);
+  AssertTrue('case Integer of present', Pos('case Integer of', S) > 0);
+end;
+
+procedure TFpcEmitTests.EnumColorEmitsTypeAndConstants;
+var S: string;
+begin
+  S := EmitSample;
+  AssertTrue('Color underlying type',
+             (Pos('Color = cint', S) > 0) or (Pos('Color = cuint', S) > 0));
+  AssertTrue('RED = 0',   Pos('RED = 0;', S) > 0);
+  AssertTrue('GREEN = 1', Pos('GREEN = 1;', S) > 0);
+  AssertTrue('BLUE = 2',  Pos('BLUE = 2;', S) > 0);
+end;
+
+procedure TFpcEmitTests.VariadicEmitsVarargsModifier;
+const
+  Snippet = 'int my_printf(const char *fmt, ...);';
+var
+  TmpH, Out_: string;
+  U: TBindingUnit;
+  E: TFpcEmitter;
+begin
+  TmpH := GetTempFileName + '.h';
+  with TFileStream.Create(TmpH, fmCreate) do
+    try Write(Snippet[1], Length(Snippet)); finally Free; end;
+  try
+    U := TBindgenParser.ParseHeader(TmpH, []);
+    try
+      E := TFpcEmitter.Create('vd', 'libvd');
+      try
+        Out_ := E.Emit(U);
+      finally
+        E.Free;
+      end;
+    finally
+      U.Free;
+    end;
+    AssertTrue('varargs modifier present', Pos('varargs', Out_) > 0);
+  finally
+    DeleteFile(TmpH);
+  end;
+end;
+
+procedure TFpcEmitTests.ConstCharPointerBecomesPAnsiChar;
+var S: string;
+begin
+  S := EmitSample;
+  AssertTrue('greet takes PAnsiChar',
+             Pos('PAnsiChar', S) > 0);
+end;
+
+procedure TFpcEmitTests.EmittedSourceCompilesUnderFpc;
+var
+  S, TmpDir, PasFile, OutFile, Cmd: string;
+  RC: Integer;
+begin
+  S := EmitSample;
+  TmpDir := GetTempDir(True);
+  PasFile := IncludeTrailingPathDelimiter(TmpDir) + 'sample.pas';
+  OutFile := IncludeTrailingPathDelimiter(TmpDir) + 'sample.out';
+  with TFileStream.Create(PasFile, fmCreate) do
+    try Write(S[1], Length(S)); finally Free; end;
+  try
+    { -Cn  produces .o only (no link). Plenty for syntactic verification. }
+    Cmd := Format('fpc -Cn -O- %s > %s 2>&1', [PasFile, OutFile]);
+    RC := ExecuteProcess('/bin/sh', ['-c', Cmd]);
+    if RC <> 0 then
+    begin
+      Writeln('--- fpc output ---');
+      with TStringList.Create do
+      try
+        LoadFromFile(OutFile);
+        Writeln(Text);
+      finally
+        Free;
+      end;
+      Writeln('--- emitted source ---');
+      Writeln(S);
+    end;
+    AssertEquals('fpc -Cn returns 0 on emitted source', 0, RC);
+  finally
+    DeleteFile(PasFile);
+    DeleteFile(OutFile);
+    DeleteFile(ChangeFileExt(PasFile, '.o'));
+    DeleteFile(ChangeFileExt(PasFile, '.ppu'));
+  end;
+end;
+
 { TClangTypeTests }
 
 function TClangTypeTests.FindCursor(Idx: TClangIndex; const Header, Spelling: string;
@@ -490,6 +676,7 @@ begin
     RegisterTest(TIRTests);
     RegisterTest(TParserTests);
     RegisterTest(TClangTypeTests);
+    RegisterTest(TFpcEmitTests);
     Application.Initialize;
     Application.Run;
   finally
