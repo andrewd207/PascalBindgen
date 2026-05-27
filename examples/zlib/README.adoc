@@ -3,50 +3,53 @@
 
 A worked example of `pascal_bindgen` against a real-world C header
 (`/usr/include/zlib.h`, ~1.9 K LOC). Run `./generate.sh` from the
-repo root to regenerate the two `.pas` files.
+repo root to regenerate the two `.pas` files, then `./build.sh`
+from this directory to build a small round-trip demo.
 
-== What lands cleanly
+== What this example demonstrates
 
-* All public function declarations (~85 entries: deflate/inflate
-  variants, gz_* file helpers, adler32/crc32, etc.)
-* Functions with multi-argument signatures, return types, and
-  `va_list`-style varargs (e.g. `gzprintf`).
-* The concrete `z_stream_s` struct (passed by `^z_stream_s` everywhere
-  in the API).
-* The empty/opaque-marker `internal_state` record.
-* Doxygen-style block comments preceding each function carry through
-  as `(* ... *)` blocks above the `external` declarations.
-* Provenance header at the top of each file lists the source path so
-  the binding is traceable back to the upstream header.
+Two things at the same time:
 
-== What does not work yet
+1. *The pipeline is real* — `demo.pas` calls `zlibVersion`,
+   `compressBound`, `compress`, and `uncompress` against the system
+   `libz.so.1`, round-trips a 149-byte buffer down to 36 bytes and
+   back, and verifies byte equality. The four `external`
+   declarations were lifted verbatim from `zlib_fpc.pas` (parameter
+   types only swapped from `^Bytef` to a named `PBytef` — see gap §5
+   below); their `cdecl` convention, library name, and parameter
+   shapes are exactly what the generator produced.
+2. *The v1 emitter still cannot ship a usable `.pas` file for
+   anything but the simplest header.* Compiling the full
+   `zlib_fpc.pas` from this directory does not work: the gaps below
+   compound. The demo is hand-trimmed evidence that the *kind* of
+   declaration the emitter produces is correct, not that the *unit*
+   it produces is consumable.
 
-These are *known* limitations surfaced by this example — they were
-not regressions caused by the zlib run. Each becomes a v1 issue to
-tackle next.
+== Gaps surfaced by zlib
+
+These are the v1 limitations zlib exposes, in roughly the order
+they trip up `fpc -Cn examples/zlib/zlib_fpc.pas`:
 
 === 1. Typedefs from `#include`d headers are dropped
 
-zlib defines its public typedefs in `zconf.h`, which `zlib.h`
-includes. Names like `voidpf`, `uInt`, `Bytef`, `uLong`, `gzFile`,
-`z_off_t`, `z_size_t`, `z_streamp` therefore live "outside the main
-file" and the parser's `clang_Location_isFromMainFile` filter throws
-them away.
+zlib defines its public typedefs (`voidpf`, `uInt`, `Bytef`, `uLong`,
+`gzFile`, `z_off_t`, `z_size_t`, `z_streamp` ...) in `zconf.h`,
+which `zlib.h` includes. Names from `<sys/types.h>` such as `off_t`
+arrive the same way. The parser's `clang_Location_isFromMainFile`
+filter drops every cursor that came from one of those files.
 
-Effect: the generated bindings reference these names in field types
-and parameter lists without ever declaring them, so the output will
-not compile as-is. Hand-writing a small `zconf.pas` preamble that
-maps the affected names is the current workaround.
+Effect: the generated bindings reference these names without ever
+declaring them.
 
 Fix path: relax the location filter from "main file only" to
-"non-system header" — i.e. admit anything libclang resolves under a
+"non-system header" — admit anything libclang resolves under a
 non-`<>` include path, while still skipping `<stdio.h>` / `<stddef.h>`
 and the like.
 
 === 2. Function-pointer typedefs render to garbage
 
 The v1 emitters do not synthesise Pascal procedural types. zlib's
-`alloc_func` / `free_func` typedefs come out as:
+`alloc_func` / `free_func` typedefs come out as
 
 [source,pascal]
 ----
@@ -55,42 +58,100 @@ free_func  = ^void (voidpf, voidpf);
 ----
 
 — literal C return-then-args spelling rather than the legal Pascal
-form (e.g. `function (opaque, items, size: ...): voidpf; cdecl;`).
-The same shows up inside `z_stream_s.zalloc` / `.zfree` field types.
+form (`function (...): voidpf; cdecl;`). The same shows up inside
+`z_stream_s.zalloc` / `.zfree`, plus the `in_func` / `out_func`
+typedefs and any function that takes them as parameters
+(`inflateBack`).
 
-Fix path: detect `tkPrimitive` whose spelling parses as a function
-pointer (or, better, add a dedicated `tkFuncPtr` IR kind populated
-from libclang's `CXTypeKind_FunctionProto`) and route both emitters
-through a per-dialect procedural-type writer.
+Fix path: detect `CXTypeKind_FunctionProto` underlying types and
+route both emitters through a per-dialect procedural-type writer.
 
 === 3. Macros are silently skipped
 
-zlib exports a few status codes (`Z_OK`, `Z_STREAM_END`, etc.) and
+zlib exports a few status codes (`Z_OK`, `Z_STREAM_END`, ...) and
 flush constants (`Z_NO_FLUSH`, ...) as `#define` macros. The parser
 runs with detailed preprocessing off and surfaces no `LossReason`
-entries for these yet.
+entries for these yet — the demo hard-codes `Z_OK = 0`.
 
 Fix path: turn on `CXTranslationUnit_DetailedPreprocessingRecord`,
 filter `MacroDef` cursors for integer-literal-only bodies, and emit
 them as a `const` section alongside the enum constants.
 
-=== 4. Underlying primitive aliases not chased
+=== 4. Typedef-chain unwrapping is one-shot
 
-Pascal can express `uInt = Cardinal;` cleanly. Even when the typedef
-itself is dropped (gap #1), the *use sites* could chase one level
-through `CXCursor_TypedefDeclUnderlyingType` and emit the canonical
-primitive. The v1 emitter prints the typedef spelling verbatim
-instead.
+When a typedef references another typedef-of-primitive, the emitter
+prints the spelling verbatim instead of chasing one more hop to the
+canonical primitive. Even once gap §1 is fixed, `Bytef` would still
+need to resolve to `Byte` or `cuchar` rather than stop at the
+typedef name.
 
-== Verifying the output
+=== 5. Anonymous pointer types in parameter lists
 
-`fpc -Cn examples/zlib/zlib_fpc.pas` currently fails at the
-undeclared `voidpf` etc. — that is gap #1. Once a hand-written
-`zconf.pas` preamble is dropped in (or gap #1 is fixed), `fpc -Cn`
-parses the rest of the unit cleanly.
+The biggest single emitter bug. FPC (both `objfpc` and `delphi`
+modes) rejects `^X` as a parameter type — anonymous pointer types
+are only allowed in record fields and variable declarations, never
+in function/procedure parameter lists:
 
-Run `pasbuild test` from the repo root for the regression suite —
-its `TFpcEmitTests.EmittedSourceCompilesUnderFpc` and
-`TBlaiseEmitTests.EmittedSourceCompilesUnderBlaise` tests exercise
-the emitters against the smaller `src/test/resources/sample.h`,
-which uses only self-contained types and so passes cleanly.
+[source]
+----
+demo.pas(31,25) Error: Type identifier expected
+----
+
+zlib's API has pointer parameters on almost every function
+(`compress(Bytef *dest, ...)` etc.), so this hits *every other
+function declaration* in the generated output. The demo works
+around it by hand-aliasing `PBytef = ^Bytef` / `PuLongf = ^uLongf`
+and using those names instead.
+
+Fix path: in `bindgen.emit.fpc`, when emitting a parameter whose
+type spells out as `^T`, ensure a named `PT = ^T` alias exists in
+the type section and substitute the alias at the use site.
+
+=== 6. Duplicate type declarations
+
+The emitter walks the cursor tree and emits both `gzFile_s = record`
+(from the struct decl) and another `gzFile_s = ...` later when it
+chases a typedef pointing at it. FPC rejects the second one with
+"Duplicate identifier".
+
+Fix path: track already-emitted spellings during a single emit pass.
+
+=== 7. Reserved-word collisions
+
+Parameter names like `file`, `in`, `out`, `mode` collide with Pascal
+reserved words and are not escaped. FPC rejects them outright. This
+is documented as a v1 cut in the emitter header comment; the fix is
+to prepend `&` (FPC) or rename (a future Blaise emitter feature) on
+detection.
+
+== Reproducing
+
+[source,sh]
+----
+# regenerate the two .pas files (run from repo root)
+./examples/zlib/generate.sh
+
+# build the trimmed demo against libz (run from examples/zlib/)
+./build.sh
+./demo
+----
+
+Expected output:
+
+----
+zlib version: 1.3
+compressed 149 -> 36 bytes
+round-trip OK
+----
+
+== What this tells us about v1 priority
+
+The four gaps that *block* a one-line consumable `.pas` file are
+§1 (include filter), §5 (named pointer aliases), §6 (no duplicates),
+and §7 (reserved-word escaping). §2 (function-pointer typedefs) and
+§3 (macros) block specific *features* but most callers can live
+with `Pointer` and hard-coded constants in the short term.
+
+The sample header in `src/test/resources/sample.h` was carefully
+constructed to avoid every one of these — which is why the test
+suite stays green while a real header still does not compile.
