@@ -314,6 +314,96 @@ begin
   end;
 end;
 
+{ Recognize a single integer-literal C token: optional minus sign,
+  then 0x/0X-prefixed hex digits OR decimal digits, then optional
+  C integer suffix (u, l, ll, ul, ull, etc., in either case). Output
+  Pascal-compatible literal in OutLit ('$FF' for hex, decimal as-is). }
+function TryParseIntegerLiteral(const Tok: string; out OutLit: string): Boolean;
+var
+  S: string;
+  I, Lo, Hi: Integer;
+  IsHex: Boolean;
+  Sign: string;
+  Body, Suffix: string;
+  C: Char;
+begin
+  Result := False;
+  S := Trim(Tok);
+  if S = '' then Exit;
+  Sign := '';
+  if (S[1] = '-') or (S[1] = '+') then
+  begin
+    if S[1] = '-' then Sign := '-';
+    Delete(S, 1, 1);
+    if S = '' then Exit;
+  end;
+  IsHex := False;
+  Lo := 1;
+  if (Length(S) >= 2) and (S[1] = '0') and ((S[2] = 'x') or (S[2] = 'X')) then
+  begin
+    IsHex := True;
+    Lo := 3;
+  end;
+  { Scan body (digits) up to optional suffix. }
+  Hi := Lo - 1;
+  for I := Lo to Length(S) do
+  begin
+    C := S[I];
+    if IsHex then
+    begin
+      if ((C >= '0') and (C <= '9')) or ((C >= 'a') and (C <= 'f'))
+         or ((C >= 'A') and (C <= 'F')) then
+        Hi := I
+      else
+        Break;
+    end
+    else
+    begin
+      if (C >= '0') and (C <= '9') then
+        Hi := I
+      else
+        Break;
+    end;
+  end;
+  if Hi < Lo then Exit;  { no digits }
+  Body := Copy(S, Lo, Hi - Lo + 1);
+  Suffix := Copy(S, Hi + 1, MaxInt);
+  { Validate suffix is only u/U/l/L characters. }
+  for I := 1 to Length(Suffix) do
+  begin
+    C := Suffix[I];
+    if not ((C = 'u') or (C = 'U') or (C = 'l') or (C = 'L')) then
+      Exit;
+  end;
+  if IsHex then
+    OutLit := Sign + '$' + Body
+  else
+    OutLit := Sign + Body;
+  Result := True;
+end;
+
+function BuildMacro(C: TClangCursor): TBindingMacroConst;
+var
+  Body, Lit, FN: string;
+  Line, Col: Cardinal;
+begin
+  Result := nil;
+  { Reject builtin / command-line macros: they have no source file. }
+  C.Location(FN, Line, Col);
+  if FN = '' then Exit;
+  Body := C.MacroBody;
+  if Body = '' then Exit;
+  { Single token only — reject anything with internal whitespace
+    (we joined tokens with LF). Parenthesized / shifted / arithmetic
+    expressions stay deferred. }
+  if Pos(#10, Body) > 0 then Exit;
+  if not TryParseIntegerLiteral(Body, Lit) then Exit;
+  Result := TBindingMacroConst.Create(C.Spelling, CursorLoc(C));
+  Result.RawValue := Lit;
+  Result.MacroKind := mkInteger;
+  AttachComment(Result, C);
+end;
+
 { Internal: walk a parsed TU and populate the binding unit. Both
   ParseHeader overloads route through here so the AST-walking logic
   stays in one place. The TU is *owned* by this routine. }
@@ -350,8 +440,11 @@ begin
             Decl := BuildRecord(Child, True)
           else if K = TClangKinds.EnumDecl then
             Decl := BuildEnum(Child)
+          else if K = TClangKinds.MacroDef then
+            Decl := BuildMacro(Child)
           else
             Continue;
+          if Decl = nil then Continue;
           Result.Decls.Add(Decl);
         end;
       finally

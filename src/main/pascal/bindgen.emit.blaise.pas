@@ -40,6 +40,7 @@ type
     procedure EmitRecord(R: TBindingRecord);
     procedure EmitEnum(E: TBindingEnum);
     procedure EmitTypedef(T: TBindingTypedef);
+    procedure EmitMacro(M: TBindingMacroConst);
     function  MapType(T: TBindingType): string;
     function  MapPrimitive(const Spelling: string): string;
     function  LocComment(const Loc: TSourceLoc): string;
@@ -312,6 +313,12 @@ begin
   Line(Format('  %s = %s;%s', [T.Name, Aliased, LocComment(T.Location)]));
 end;
 
+procedure TBlaiseEmitter.EmitMacro(M: TBindingMacroConst);
+begin
+  if M.RawComment <> '' then Line(PascalizeComment(M.RawComment));
+  Line(Format('  %s = %s;%s', [M.Name, M.RawValue, LocComment(M.Location)]));
+end;
+
 procedure TBlaiseEmitter.EmitDecl(D: TBindingDecl);
 begin
   if D is TBindingFunction then
@@ -330,7 +337,7 @@ function TBlaiseEmitter.Emit(U: TBindingUnit): string;
 var
   I: Integer;
   D: TBindingDecl;
-  HasTypes, HasFuncs: Boolean;
+  HasTypes, HasFuncs, HasMacros: Boolean;
 begin
   FOutput.Clear;
   FEmittedTypes.Clear;
@@ -343,11 +350,13 @@ begin
 
   HasTypes := False;
   HasFuncs := False;
+  HasMacros := False;
   for I := 0 to U.Decls.Count - 1 do
   begin
     D := U.Decls.Items[I];
-    if not (D is TBindingFunction) then HasTypes := True
-    else HasFuncs := True;
+    if D is TBindingFunction then HasFuncs := True
+    else if D is TBindingMacroConst then HasMacros := True
+    else HasTypes := True;
   end;
 
   if HasTypes then
@@ -356,7 +365,21 @@ begin
     for I := 0 to U.Decls.Count - 1 do
     begin
       D := U.Decls.Items[I];
-      if not (D is TBindingFunction) then EmitDecl(D);
+      if (not (D is TBindingFunction))
+         and (not (D is TBindingMacroConst)) then
+        EmitDecl(D);
+    end;
+    Line;
+  end;
+
+  if HasMacros then
+  begin
+    Line('const');
+    for I := 0 to U.Decls.Count - 1 do
+    begin
+      D := U.Decls.Items[I];
+      if D is TBindingMacroConst then
+        EmitMacro(TBindingMacroConst(D));
     end;
     Line;
   end;

@@ -89,6 +89,7 @@ type
     procedure PointerParamAndReturnAreNamedAliasesAndCompile;
     procedure FilteredOutTypedefChasesCanonicalPrimitive;
     procedure FunctionPointerTypedefBecomesProceduralType;
+    procedure IntegerLiteralMacrosBecomeConsts;
   end;
 
   TFpcEmitTests = class(TTestCase)
@@ -732,6 +733,93 @@ begin
       WriteLn('--- emitted source ---'); WriteLn(Src);
     end;
     AssertEquals('emitted function-pointer source compiles', 0, RC);
+  finally
+    DeleteFile(PasFile);
+    DeleteFile(OutFile);
+  end;
+end;
+
+procedure TParserTests.IntegerLiteralMacrosBecomeConsts;
+{ B3: integer-literal #define macros are extracted as TBindingMacroConst
+  with Pascal-syntax RawValue (hex '$FF', decimal as-is); function-like,
+  string, and expression-bodied macros are skipped silently. Output
+  compiles under FPC. }
+const
+  Candidates: array[0..3] of string = (
+    'sample_macros.h',
+    'src/test/resources/sample_macros.h',
+    '../src/test/resources/sample_macros.h',
+    '../../src/test/resources/sample_macros.h'
+  );
+var
+  Hdr, Src: string;
+  I, RC: Integer;
+  U: TBindingUnit;
+  E: TFpcEmitter;
+  D: TBindingDecl;
+  M: TBindingMacroConst;
+  SawOK, SawHex, SawFunclike, SawExpr, SawStr: Boolean;
+  TmpDir, PasFile, OutFile, Cmd: string;
+begin
+  Hdr := Candidates[0];
+  for I := Low(Candidates) to High(Candidates) do
+    if FileExists(Candidates[I]) then begin Hdr := Candidates[I]; Break; end;
+
+  U := ParseHeader(Hdr);
+  try
+    SawOK := False; SawHex := False;
+    SawFunclike := False; SawExpr := False; SawStr := False;
+    for I := 0 to U.Decls.Count - 1 do
+    begin
+      D := U.Decls.Items[I];
+      if not (D is TBindingMacroConst) then Continue;
+      M := TBindingMacroConst(D);
+      if M.Name = 'M_OK' then
+      begin
+        SawOK := True;
+        AssertEquals('M_OK is decimal 0', '0', M.RawValue);
+      end;
+      if M.Name = 'M_FLAG_A' then
+      begin
+        SawHex := True;
+        AssertEquals('M_FLAG_A is $01', '$01', M.RawValue);
+      end;
+      if M.Name = 'M_FUNCLIKE' then SawFunclike := True;
+      if M.Name = 'M_EXPR'     then SawExpr := True;
+      if M.Name = 'M_STR'      then SawStr := True;
+    end;
+    AssertTrue('M_OK extracted',         SawOK);
+    AssertTrue('M_FLAG_A hex extracted', SawHex);
+    AssertFalse('function-like macro is skipped',  SawFunclike);
+    AssertFalse('expression-bodied macro is skipped', SawExpr);
+    AssertFalse('string-literal macro is skipped', SawStr);
+
+    E := TFpcEmitter.Create('macros', 'libdummy');
+    try
+      Src := E.Emit(U);
+    finally
+      E.Free;
+    end;
+  finally
+    U.Free;
+  end;
+
+  AssertTrue('const block present', Pos('const', Src) > 0);
+  AssertTrue('M_FLAG_B emitted as $FF', Pos('M_FLAG_B = $FF', Src) > 0);
+
+  TmpDir := GetTempDir(True);
+  PasFile := IncludeTrailingPathDelimiter(TmpDir) + 'macros.pas';
+  OutFile := IncludeTrailingPathDelimiter(TmpDir) + 'macros.out';
+  WriteSnippet(PasFile, Src);
+  try
+    Cmd := Format('fpc -Cn -O- %s > %s 2>&1', [PasFile, OutFile]);
+    RC := RunShell(Cmd);
+    if RC <> 0 then
+    begin
+      WriteLn('--- fpc output ---'); WriteLn(ReadAllText(OutFile));
+      WriteLn('--- emitted source ---'); WriteLn(Src);
+    end;
+    AssertEquals('emitted macro-const source compiles', 0, RC);
   finally
     DeleteFile(PasFile);
     DeleteFile(OutFile);

@@ -65,6 +65,38 @@ type
   end;
   gzFile = ^gzFile_s;  { zlib.h:1305 }
 
+const
+  MAX_MEM_LEVEL = 9;  { zconf.h:267 }
+  MAX_WBITS = 15;  { zconf.h:277 }
+  ZLIB_VERNUM = $1300;  { zlib.h:41 }
+  ZLIB_VER_MAJOR = 1;  { zlib.h:42 }
+  ZLIB_VER_MINOR = 3;  { zlib.h:43 }
+  ZLIB_VER_REVISION = 0;  { zlib.h:44 }
+  ZLIB_VER_SUBREVISION = 0;  { zlib.h:45 }
+  Z_NO_FLUSH = 0;  { zlib.h:168 }
+  Z_PARTIAL_FLUSH = 1;  { zlib.h:169 }
+  Z_SYNC_FLUSH = 2;  { zlib.h:170 }
+  Z_FULL_FLUSH = 3;  { zlib.h:171 }
+  Z_FINISH = 4;  { zlib.h:172 }
+  Z_BLOCK = 5;  { zlib.h:173 }
+  Z_TREES = 6;  { zlib.h:174 }
+  Z_OK = 0;  { zlib.h:177 }
+  Z_STREAM_END = 1;  { zlib.h:178 }
+  Z_NEED_DICT = 2;  { zlib.h:179 }
+  Z_NO_COMPRESSION = 0;  { zlib.h:190 }
+  Z_BEST_SPEED = 1;  { zlib.h:191 }
+  Z_BEST_COMPRESSION = 9;  { zlib.h:192 }
+  Z_FILTERED = 1;  { zlib.h:196 }
+  Z_HUFFMAN_ONLY = 2;  { zlib.h:197 }
+  Z_RLE = 3;  { zlib.h:198 }
+  Z_FIXED = 4;  { zlib.h:199 }
+  Z_DEFAULT_STRATEGY = 0;  { zlib.h:200 }
+  Z_BINARY = 0;  { zlib.h:203 }
+  Z_TEXT = 1;  { zlib.h:204 }
+  Z_UNKNOWN = 2;  { zlib.h:206 }
+  Z_DEFLATED = 8;  { zlib.h:209 }
+  Z_NULL = 0;  { zlib.h:212 }
+
 function zlibVersion: PChar; external name 'zlibVersion';  { zlib.h:220 }
 function deflate(strm: z_streamp; flush: Integer): Integer; external name 'deflate';  { zlib.h:250 }
 function deflateEnd(strm: z_streamp): Integer; external name 'deflateEnd';  { zlib.h:363 }

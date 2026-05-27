@@ -56,7 +56,8 @@ int pbg_parse_tu(PbgIndex* p,
     CXTranslationUnit tu = NULL;
     enum CXErrorCode rc = clang_parseTranslationUnit2(
         p->idx, filename, args, nargs, NULL, 0,
-        CXTranslationUnit_SkipFunctionBodies,
+        CXTranslationUnit_SkipFunctionBodies |
+        CXTranslationUnit_DetailedPreprocessingRecord,
         &tu);
     if (rc != CXError_Success) return (int)rc;
     PbgTU* w = (PbgTU*)malloc(sizeof(*w));
@@ -171,6 +172,49 @@ const char* pbg_cursor_raw_comment(PbgCursor* p) {
     char* copy = raw ? strdup(raw) : NULL;
     clang_disposeString(s);
     return copy;
+}
+
+/* Macro body tokens, joined by '\n', for MacroDefinition cursors.
+ * Skips the first token (the macro name itself). Returns NULL for
+ * function-like macros and for macros with an empty body. Caller
+ * frees via pbg_free_string. */
+const char* pbg_cursor_macro_body(PbgCursor* p) {
+    if (clang_Cursor_isMacroFunctionLike(p->c)) return NULL;
+    CXTranslationUnit tu = clang_Cursor_getTranslationUnit(p->c);
+    CXSourceRange range = clang_getCursorExtent(p->c);
+    CXToken* tokens = NULL;
+    unsigned ntok = 0;
+    clang_tokenize(tu, range, &tokens, &ntok);
+    if (ntok <= 1) {
+        if (tokens) clang_disposeTokens(tu, tokens, ntok);
+        return NULL;
+    }
+    /* Compute total length first. */
+    size_t total = 0;
+    for (unsigned i = 1; i < ntok; ++i) {
+        CXString s = clang_getTokenSpelling(tu, tokens[i]);
+        const char* raw = clang_getCString(s);
+        if (raw) total += strlen(raw);
+        total += 1; /* separator */
+        clang_disposeString(s);
+    }
+    char* buf = (char*)malloc(total + 1);
+    if (!buf) { clang_disposeTokens(tu, tokens, ntok); return NULL; }
+    char* w = buf;
+    for (unsigned i = 1; i < ntok; ++i) {
+        CXString s = clang_getTokenSpelling(tu, tokens[i]);
+        const char* raw = clang_getCString(s);
+        if (raw) {
+            size_t l = strlen(raw);
+            memcpy(w, raw, l);
+            w += l;
+        }
+        if (i + 1 < ntok) *w++ = '\n';
+        clang_disposeString(s);
+    }
+    *w = '\0';
+    clang_disposeTokens(tu, tokens, ntok);
+    return buf;
 }
 
 /* CXCursorKind constants we care about. Stable across libclang versions. */

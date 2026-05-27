@@ -47,6 +47,7 @@ procedure pbg_cursor_location(p: PPbgCursor; out_file: PPChar; out_line, out_col
 function pbg_cursor_in_main_file(p: PPbgCursor): cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_cursor_in_main_file';
 function pbg_cursor_in_system_header(p: PPbgCursor): cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_cursor_in_system_header';
 function pbg_cursor_raw_comment(p: PPbgCursor): PChar; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_cursor_raw_comment';
+function pbg_cursor_macro_body(p: PPbgCursor): PChar; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_cursor_macro_body';
 
 { stable cursor-kind constants (queried at runtime, not hardcoded) }
 function pbg_kind_function_decl: cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_kind_function_decl';

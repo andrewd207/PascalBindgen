@@ -51,6 +51,7 @@ type
     procedure EmitRecord(R: TBindingRecord);
     procedure EmitEnum(E: TBindingEnum);
     procedure EmitTypedef(T: TBindingTypedef);
+    procedure EmitMacro(M: TBindingMacroConst);
     function  MapType(T: TBindingType): string;
     { Like MapType, but if the result is an inline pointer ('^X')
       it registers and returns a named alias 'PX = ^X' — required
@@ -474,6 +475,13 @@ begin
   Line(Format('  %s = %s;%s', [EscapeIdent(T.Name), Aliased, LocComment(T.Location)]));
 end;
 
+procedure TFpcEmitter.EmitMacro(M: TBindingMacroConst);
+begin
+  if M.RawComment <> '' then Line(PascalizeComment(M.RawComment));
+  Line(Format('  %s = %s;%s',
+              [EscapeIdent(M.Name), M.RawValue, LocComment(M.Location)]));
+end;
+
 procedure TFpcEmitter.EmitDecl(D: TBindingDecl);
 begin
   if D is TBindingFunction then
@@ -495,7 +503,7 @@ function TFpcEmitter.Emit(U: TBindingUnit): string;
 var
   I: Integer;
   D: TBindingDecl;
-  HasTypes, HasFuncs: Boolean;
+  HasTypes, HasFuncs, HasMacros: Boolean;
 begin
   FOutput.Clear;
   FEmittedTypes.Clear;
@@ -525,8 +533,8 @@ begin
   for I := 0 to U.Decls.Count - 1 do
   begin
     D := U.Decls.Items[I];
-    if not (D is TBindingFunction) then HasTypes := True
-    else HasFuncs := True;
+    if D is TBindingFunction then HasFuncs := True
+    else if not (D is TBindingMacroConst) then HasTypes := True;
   end;
 
   if HasTypes or (FPointerAliases.Count > 0) then
@@ -547,7 +555,26 @@ begin
     for I := 0 to U.Decls.Count - 1 do
     begin
       D := U.Decls.Items[I];
-      if not (D is TBindingFunction) then EmitDecl(D);
+      if (not (D is TBindingFunction))
+         and (not (D is TBindingMacroConst)) then
+        EmitDecl(D);
+    end;
+    Line;
+  end;
+
+  { #define integer-constant macros emitted as a const block. }
+  HasMacros := False;
+  for I := 0 to U.Decls.Count - 1 do
+    if U.Decls.Items[I] is TBindingMacroConst then
+    begin HasMacros := True; Break; end;
+  if HasMacros then
+  begin
+    Line('const');
+    for I := 0 to U.Decls.Count - 1 do
+    begin
+      D := U.Decls.Items[I];
+      if D is TBindingMacroConst then
+        EmitMacro(TBindingMacroConst(D));
     end;
     Line;
   end;

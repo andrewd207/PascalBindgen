@@ -58,6 +58,7 @@ type
     function InMainFile: Boolean;
     function InSystemHeader: Boolean;
     function RawComment: string;
+    function MacroBody: string;  { joined by LF; '' for func-like / empty }
     function TypeOf: TClangType;
     function TypedefUnderlying: TClangType;
     function EnumIntegerType: TClangType;
@@ -341,6 +342,15 @@ var
   P: PChar;
 begin
   P := pbg_cursor_raw_comment(FHandle);
+  Result := CStrOrEmpty(P);
+  if P <> nil then pbg_free_string(P);
+end;
+
+function TClangCursor.MacroBody: string;
+var
+  P: PChar;
+begin
+  P := pbg_cursor_macro_body(FHandle);
   Result := CStrOrEmpty(P);
   if P <> nil then pbg_free_string(P);
 end;
