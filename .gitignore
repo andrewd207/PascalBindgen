@@ -3,3 +3,4 @@ target/
 *.ppu
 examples/gtk4/demo
 examples/vulkan/demo
+examples/blaise-vulkan/demo

@@ -15,8 +15,11 @@ if [ $# -lt 1 ]; then
   exit 2
 fi
 
-exec "$BLAISE_BIN" --source "$1" --emit-ir \
+SRC="$1"
+shift  # any further args are passed through (e.g. extra --unit-path entries)
+exec "$BLAISE_BIN" --source "$SRC" --emit-ir \
   --unit-path "$BLAISE_REPO/compiler/src/main/pascal" \
   --unit-path "$BLAISE_REPO/runtime/src/main/pascal" \
   --unit-path "$BLAISE_REPO/stdlib/src/main/pascal" \
+  "$@" \
   > /dev/null
