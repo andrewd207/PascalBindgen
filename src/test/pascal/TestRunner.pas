@@ -4,7 +4,7 @@ program TestRunner;
 
 uses
   Classes, SysUtils, fpcunit, testregistry, consoletestrunner,
-  bindgen.ir, bindgen.parser, bindgen.emit.fpc, clang.wrap;
+  bindgen.ir, bindgen.parser, bindgen.emit.fpc, bindgen.emit.blaise, clang.wrap;
 
 type
   TIRTests = class(TTestCase)
@@ -45,6 +45,20 @@ type
     procedure VariadicEmitsVarargsModifier;
     procedure ConstCharPointerBecomesPAnsiChar;
     procedure EmittedSourceCompilesUnderFpc;
+  end;
+
+  TBlaiseEmitTests = class(TTestCase)
+  private
+    function SampleHeader: string;
+    function EmitSample: string;
+  published
+    procedure HasProvenanceHeaderAndLibraryNote;
+    procedure UsesBlaiseBuiltinTypesNotCtypes;
+    procedure FunctionAddBecomesExternalNameNoCdecl;
+    procedure NoModeOrPackrecordsDirective;
+    procedure StructPointHasIntegerFields;
+    procedure EnumColorEmitsTypeAndConstants;
+    procedure EmittedSourceCompilesUnderBlaise;
   end;
 
   TClangTypeTests = class(TTestCase)
@@ -494,6 +508,141 @@ begin
   end;
 end;
 
+{ TBlaiseEmitTests }
+
+function TBlaiseEmitTests.SampleHeader: string;
+const
+  Candidates: array[0..3] of string = (
+    'sample.h',
+    'src/test/resources/sample.h',
+    '../src/test/resources/sample.h',
+    '../../src/test/resources/sample.h'
+  );
+var I: Integer;
+begin
+  for I := Low(Candidates) to High(Candidates) do
+    if FileExists(Candidates[I]) then begin Result := Candidates[I]; Exit; end;
+  Result := Candidates[0];
+end;
+
+function TBlaiseEmitTests.EmitSample: string;
+var
+  U: TBindingUnit;
+  E: TBlaiseEmitter;
+begin
+  U := TBindgenParser.ParseHeader(SampleHeader, []);
+  try
+    E := TBlaiseEmitter.Create('sample', 'libsample');
+    try
+      Result := E.Emit(U);
+    finally
+      E.Free;
+    end;
+  finally
+    U.Free;
+  end;
+end;
+
+procedure TBlaiseEmitTests.HasProvenanceHeaderAndLibraryNote;
+var S: string;
+begin
+  S := EmitSample;
+  AssertTrue('DO NOT EDIT', Pos('DO NOT EDIT', S) > 0);
+  AssertTrue('Blaise dialect banner', Pos('Blaise dialect', S) > 0);
+  AssertTrue('library shows up as informational',
+             (Pos('library: libsample', S) > 0) and
+             (Pos('informational', S) > 0));
+end;
+
+procedure TBlaiseEmitTests.UsesBlaiseBuiltinTypesNotCtypes;
+var S: string;
+begin
+  S := EmitSample;
+  AssertFalse('no ctypes import', Pos('ctypes', S) > 0);
+  AssertFalse('no cint', Pos('cint', S) > 0);
+  AssertTrue('uses Integer', Pos('Integer', S) > 0);
+end;
+
+procedure TBlaiseEmitTests.FunctionAddBecomesExternalNameNoCdecl;
+var S: string;
+begin
+  S := EmitSample;
+  AssertTrue('add signature', Pos('function add(a: Integer; b: Integer): Integer;', S) > 0);
+  AssertTrue('external name', Pos('external name ''add''', S) > 0);
+  AssertFalse('no cdecl modifier', Pos('cdecl', S) > 0);
+end;
+
+procedure TBlaiseEmitTests.NoModeOrPackrecordsDirective;
+var S: string;
+begin
+  S := EmitSample;
+  AssertFalse('no $mode',         Pos('{$mode', S) > 0);
+  AssertFalse('no PACKRECORDS',   Pos('PACKRECORDS', S) > 0);
+  AssertFalse('no $H+',           Pos('{$H+', S) > 0);
+end;
+
+procedure TBlaiseEmitTests.StructPointHasIntegerFields;
+var S: string;
+begin
+  S := EmitSample;
+  AssertTrue('Point record',  Pos('Point = record', S) > 0);
+  AssertTrue('x: Integer',    Pos('x: Integer;', S) > 0);
+  AssertTrue('y: Integer',    Pos('y: Integer;', S) > 0);
+end;
+
+procedure TBlaiseEmitTests.EnumColorEmitsTypeAndConstants;
+var S: string;
+begin
+  S := EmitSample;
+  AssertTrue('Color alias',
+             (Pos('Color = Integer', S) > 0) or (Pos('Color = Cardinal', S) > 0));
+  AssertTrue('RED = 0',   Pos('RED = 0;', S) > 0);
+  AssertTrue('GREEN = 1', Pos('GREEN = 1;', S) > 0);
+  AssertTrue('BLUE = 2',  Pos('BLUE = 2;', S) > 0);
+end;
+
+procedure TBlaiseEmitTests.EmittedSourceCompilesUnderBlaise;
+const
+  BlaiseBin = '/home/andrew/Programming/GroupProjects/blaise/local/blaisec.py';
+var
+  S, TmpDir, PasFile, OutFile, Cmd: string;
+  RC: Integer;
+begin
+  if not FileExists(BlaiseBin) then
+  begin
+    { Don't fail the suite on machines where Blaise isn't installed;
+      this guard is only meaningful where the wrapper exists. }
+    Ignore('Blaise wrapper not available at ' + BlaiseBin);
+    Exit;
+  end;
+  S := EmitSample;
+  TmpDir := GetTempDir(True);
+  PasFile := IncludeTrailingPathDelimiter(TmpDir) + 'sample.pas';
+  OutFile := IncludeTrailingPathDelimiter(TmpDir) + 'sample.out';
+  with TFileStream.Create(PasFile, fmCreate) do
+    try Write(S[1], Length(S)); finally Free; end;
+  try
+    { --emit-ir: parse + lower without writing a binary. Sufficient
+      proof that the emitted unit is syntactically and semantically
+      acceptable to Blaise as a standalone unit. }
+    Cmd := Format('%s --source %s --emit-ir > %s 2>&1',
+                  [BlaiseBin, PasFile, OutFile]);
+    RC := ExecuteProcess('/bin/sh', ['-c', Cmd]);
+    if RC <> 0 then
+    begin
+      Writeln('--- blaise output ---');
+      with TStringList.Create do
+      try LoadFromFile(OutFile); Writeln(Text); finally Free; end;
+      Writeln('--- emitted source ---');
+      Writeln(S);
+    end;
+    AssertEquals('blaise --emit-ir returns 0', 0, RC);
+  finally
+    DeleteFile(PasFile);
+    DeleteFile(OutFile);
+  end;
+end;
+
 { TClangTypeTests }
 
 function TClangTypeTests.FindCursor(Idx: TClangIndex; const Header, Spelling: string;
@@ -677,6 +826,7 @@ begin
     RegisterTest(TParserTests);
     RegisterTest(TClangTypeTests);
     RegisterTest(TFpcEmitTests);
+    RegisterTest(TBlaiseEmitTests);
     Application.Initialize;
     Application.Run;
   finally

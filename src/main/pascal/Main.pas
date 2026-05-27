@@ -3,7 +3,7 @@ program Main;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, bindgen.ir, bindgen.parser, bindgen.emit.fpc;
+  SysUtils, bindgen.ir, bindgen.parser, bindgen.emit.fpc, bindgen.emit.blaise;
 
 const
   Version = '1.0.0';
@@ -76,7 +76,8 @@ var
   I: Integer;
   PastDD: Boolean = False;
   U: TBindingUnit;
-  Emitter: TFpcEmitter;
+  FpcEmitter: TFpcEmitter;
+  BlaiseEmitter: TBlaiseEmitter;
   Arg: string;
 begin
   SetLength(ExtraArgs, 0);
@@ -116,10 +117,7 @@ begin
     else if Arg = '--fpc' then
       Dialect := 'fpc'
     else if Arg = '--blaise' then
-    begin
-      WriteLn(StdErr, 'pascal_bindgen: --blaise emitter not implemented yet');
-      Halt(2);
-    end
+      Dialect := 'blaise'
     else if Arg = '--' then
       PastDD := True
     else
@@ -133,12 +131,23 @@ begin
     if Dialect = 'fpc' then
     begin
       if UnitName = '' then UnitName := DeriveUnitName(OutputPath, HeaderPath);
-      Emitter := TFpcEmitter.Create(UnitName, LibraryName);
+      FpcEmitter := TFpcEmitter.Create(UnitName, LibraryName);
       try
         if OutputPath = '' then OutputPath := '-';
-        WriteAllText(OutputPath, Emitter.Emit(U));
+        WriteAllText(OutputPath, FpcEmitter.Emit(U));
       finally
-        Emitter.Free;
+        FpcEmitter.Free;
+      end;
+    end
+    else if Dialect = 'blaise' then
+    begin
+      if UnitName = '' then UnitName := DeriveUnitName(OutputPath, HeaderPath);
+      BlaiseEmitter := TBlaiseEmitter.Create(UnitName, LibraryName);
+      try
+        if OutputPath = '' then OutputPath := '-';
+        WriteAllText(OutputPath, BlaiseEmitter.Emit(U));
+      finally
+        BlaiseEmitter.Free;
       end;
     end
     else
