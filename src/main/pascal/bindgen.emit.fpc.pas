@@ -190,6 +190,9 @@ begin
   if Copy(S, 1, 6) = 'const ' then S := Trim(Copy(S, 7, MaxInt));
   if Copy(S, 1, 9) = 'volatile ' then S := Trim(Copy(S, 10, MaxInt));
   if Copy(S, 1, 6) = 'const ' then S := Trim(Copy(S, 7, MaxInt));
+  if Copy(S, 1, 7) = 'struct ' then S := Trim(Copy(S, 8, MaxInt))
+  else if Copy(S, 1, 6) = 'union '  then S := Trim(Copy(S, 7, MaxInt))
+  else if Copy(S, 1, 5) = 'enum '   then S := Trim(Copy(S, 6, MaxInt));
   if      S = 'void'                  then Result := ''
   else if S = 'bool'                  then Result := 'cbool'
   else if S = '_Bool'                 then Result := 'cbool'
@@ -411,7 +414,19 @@ begin
         if (T.Kind = tkTypedefRef)
            and (FDeclaredTypeNames.IndexOf(Inner) < 0)
            and (T.CanonicalSpelling <> '') then
-          Result := MapPrimitive(T.CanonicalSpelling)
+        begin
+          { Canonical-is-enum (e.g. Vulkan's StdVideo*Idc typedefs
+            whose enum body lives in vk_video/ — admitted as system) }
+          if Copy(T.CanonicalSpelling, 1, 5) = 'enum ' then
+            Result := 'cuint'
+          else
+            Result := MapPrimitive(T.CanonicalSpelling);
+        end
+        else if (T.Kind = tkEnumRef)
+                and (FDeclaredTypeNames.IndexOf(Inner) < 0) then
+          { C enums default to int; if the enum decl is in a header
+            we filtered out (vk_video, ...) emit cuint as fallback. }
+          Result := 'cuint'
         else
           Result := Inner;
       end;

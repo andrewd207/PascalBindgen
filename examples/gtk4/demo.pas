@@ -11,13 +11,13 @@ program demo;
 {$mode objfpc}{$H+}
 
 uses
-  ctypes, SysUtils, gtk4_fpc;
+  ctypes, SysUtils, Math, gtk4_fpc;
 
 var
   g_app: PGtkApplication;
   g_button: PGtkWidget;
   g_label: PGtkWidget;
-  g_seconds_left: Integer = 10;
+  g_seconds_left: Integer = 60;
 
 procedure update_button_label;
 var
@@ -70,7 +70,7 @@ begin
   g_label := gtk_label_new('Hello from generated bindings!');
   gtk_box_append(PGtkBox(box), g_label);
 
-  g_button := gtk_button_new_with_label('Quit (10)');
+  g_button := gtk_button_new_with_label('Quit (60)');
   g_signal_connect_data(g_button, 'clicked',
                         GCallback(@on_clicked), nil, nil, 0);
   gtk_box_append(PGtkBox(box), g_button);
@@ -84,6 +84,11 @@ end;
 var
   status: cint;
 begin
+  { GTK/Cairo do legitimate IEEE-754 math (1.0/0.0 → inf, NaN
+    compares, ...) that triggers FPC's default-unmasked FPU
+    exceptions. Mask them all so the main loop survives. }
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide,
+                    exOverflow, exUnderflow, exPrecision]);
   g_app := gtk_application_new('org.example.bindgen.demo',
                                G_APPLICATION_DEFAULT_FLAGS);
   g_signal_connect_data(g_app, 'activate',
