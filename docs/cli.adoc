@@ -1,0 +1,67 @@
+= pascal_bindgen — CLI reference
+:toc:
+
+== Synopsis
+
+[source,shell]
+----
+pascal_bindgen --blaise --header <file.h> --output <file.pas> [options]
+pascal_bindgen --fpc    --header <file.h> --output <file.pas> [options]
+----
+
+== Required flags
+
+`--blaise`::
+  Emit Blaise-dialect Pascal.
+
+`--fpc`::
+  Emit Free Pascal / Delphi-mode Pascal.
+
+`--blaise` and `--fpc` are mutually exclusive; exactly one must be
+given.
+
+`--header <path>`::
+  Path to the C header to translate. May be repeated to emit a single
+  binding unit covering several related headers.
+
+`--output <path>`::
+  Destination `.pas` file. `-` writes to stdout.
+
+== Common options (planned)
+
+`--unit-name <name>`::
+  Name to use in the emitted `unit X;` header. Defaults to the
+  output file's basename.
+
+`--library <name>`::
+  Library name to attach to `external` directives. For `--fpc` this
+  becomes `external 'libname';`. For `--blaise` it is emitted as a
+  comment until Blaise grows a matching syntax.
+
+`--include-dir <dir>` (repeatable)::
+  Added to the C preprocessor's include search path.
+
+`--define <NAME[=VALUE]>` (repeatable)::
+  Passed to the C preprocessor as `-D`.
+
+`--prefix-strip <prefix>` (repeatable)::
+  C identifier prefix to remove when generating the Pascal name
+  (e.g. `--prefix-strip gtk_` turns `gtk_window_new` into
+  `window_new`).
+
+`--no-comments`::
+  Suppress all generated comments except the provenance header at
+  the top of the file. Useful for keeping diffs small when only a
+  handful of declarations changed. See `docs/comments.adoc` for what
+  is normally emitted.
+
+== Exit codes
+
+`0`::
+  Success.
+
+`1`::
+  Parse error in the header (clang diagnostics emitted to stderr).
+
+`2`::
+  CLI usage error (missing flag, both dialect flags given, etc.).

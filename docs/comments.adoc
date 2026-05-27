@@ -1,0 +1,89 @@
+= pascal_bindgen — generated comments
+:toc:
+
+== Goal
+
+Emit *useful* comments in the generated `.pas` file. Useful means a
+human reading the bindings can answer "where did this come from?" and
+"why is the Pascal shape what it is?" without going back to the C
+header. The bar is not "explain what the function does" — that's the
+original header's job, and we copy doc comments verbatim when they
+exist.
+
+== What we emit
+
+Provenance header (top of file)::
+  One block comment at the unit top recording:
++
+* the source header path(s) and a digest/mtime
+* the `pascal_bindgen` version and the clang version used
+* the exact command line that produced the file
+* a `DO NOT EDIT` warning
++
+This is the single most useful comment in the file — it tells the
+next person how to regenerate.
+
+Pass-through doc comments::
+  Doxygen / `/** ... */` blocks immediately preceding a C
+  declaration are copied verbatim above the corresponding Pascal
+  declaration. We do *not* rewrite them into Pascal `{ ... }` style;
+  the original syntax is preserved so links/markup survive.
+
+Source location pointers::
+  Each top-level declaration gets a one-line `{ <header>:<line> }`
+  trailing comment. Cheap, terse, and lets a reader jump back to the
+  C source in their editor.
+
+Lossy-translation notes::
+  When the C → Pascal mapping loses information, leave a comment
+  explaining what. Examples:
++
+* Bit-field that doesn't fit a Pascal layout:
+  `{ bit-field: original was unsigned int : 3 }`
+* Anonymous union flattened into a `case` record:
+  `{ flattened from anonymous union at foo.h:42 }`
+* Function-like macro skipped:
+  `{ skipped: function-like macro FOO(a,b) — port by hand }`
+* Calling convention assumed because the header lacked an
+  annotation: `{ cdecl assumed (no explicit annotation in header) }`
+
+`const` parameter context::
+  Where `const T*` is mapped to a Pascal `const` parameter and the
+  pointer is dropped (passing by reference instead), note it. Keeps
+  the reader from assuming a pointer-vs-value mistake.
+
+== What we do *not* emit
+
+* Comments that paraphrase what the next line already says
+  (`{ function declaration }` above a `function`). Noise.
+* Per-field comments like `{ this is the X field }` — the field name
+  carries the information.
+* "TODO" or "FIXME" markers, unless the generator literally bailed
+  on something and the user needs to act.
+* AI/tool-flavored summaries. The header's own doc comments are the
+  source of truth; we don't rewrite them.
+
+== Implementation notes
+
+* Source locations come straight from libclang's
+  `clang_getFileLocation`. No hand parsing.
+* Doc-comment extraction uses
+  `clang_Cursor_getRawCommentText` — gives us `/** ... */` and `//!`
+  blocks attached to a cursor, including the leading stars, so we
+  paste verbatim.
+* Lossy-translation notes are emitted from the *emitter*, not the
+  parser. The parser records the loss in the IR
+  (`Translation.LossReason: string`) and the emitter formats it as a
+  comment in the target dialect.
+* Both `--blaise` and `--fpc` share comment formatting. Pascal block
+  comments (`{ ... }` and `(* ... *)`) are universal; we use `{ }`
+  for one-liners and `(* *)` only where the content might contain
+  `}`.
+
+== Open questions
+
+* Should we offer `--no-comments` to suppress everything except the
+  provenance header? Useful for tight diffs when only a few
+  declarations changed. Probably yes, low cost.
+* Should source-location pointers be a flag too, or always-on? Lean
+  always-on; it's one line per decl and cheap to scan past.

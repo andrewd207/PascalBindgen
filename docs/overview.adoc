@@ -1,0 +1,103 @@
+= pascal_bindgen
+Andrew Haines
+:toc:
+:icons: font
+
+== Purpose
+
+`pascal_bindgen` is a one-shot tool that reads C header files (`.h`) and
+emits Object Pascal binding declarations — `external` function
+prototypes, `record` layouts, constants, and enums — so that Pascal code
+can link against C libraries without anyone having to hand-port the
+header.
+
+The tool is *not* a C compiler. It does not produce object code, does
+not understand C function bodies, and does not aspire to. It produces a
+single `.pas` source file that the user checks into their project (or
+regenerates as part of their build) and consumes with a normal `uses`
+clause.
+
+== Scope
+
+In scope:
+
+* `extern` function declarations (return type + parameters, including
+  varargs)
+* `typedef` aliases (resolved to the underlying type when possible)
+* `struct` / `union` layouts as Pascal `record` / `record case`
+* `enum` constants
+* `#define` simple value macros (integer / string literals)
+* Pointer, array, and function-pointer parameter types
+* `const` qualification mapped to Pascal `const` parameters
+* Calling conventions (cdecl by default; stdcall / fastcall where the
+  header annotates them)
+* Bit-fields (best effort — emitted with a comment when not
+  representable)
+
+Out of scope (at least for v1):
+
+* Function-like macros with bodies (`#define ADD(a,b) ((a)+(b))`)
+* C++ headers (overloads, templates, namespaces, references)
+* Inline function bodies — declared but the body is dropped
+* `_Generic`, `__attribute__((...))`-driven semantic changes,
+  `__builtin_*` — passed through best-effort or skipped with a comment
+
+== Output dialects
+
+`pascal_bindgen` emits one of two dialects, selected by command-line
+flag:
+
+`--blaise`::
+  Emits source aimed at the Blaise compiler. Uses Blaise's preferred
+  spellings (lowercase keywords as Blaise writes them, ARC-aware
+  string handling, `external name '...'` syntax, no `cvar`/`public`
+  modifiers FPC ships but Blaise doesn't).
+
+`--fpc`::
+  Emits source aimed at Free Pascal / Delphi-mode FPC. Uses
+  `cdecl;`/`stdcall;` modifiers, `external 'libfoo';` syntax with the
+  library name on the directive, `{$PACKRECORDS C}` at the top of the
+  unit, and FPC-conventional naming.
+
+Exactly one of the two flags must be supplied. If the dialects diverge
+on a given construct, the divergence lives in the emitter — the parser
+and intermediate model are dialect-neutral.
+
+== Architecture (planned)
+
+[source]
+----
+  .h file(s)
+      |
+      v
+  +----------------+
+  | C parser       |   libclang via FFI, or a subprocess that emits
+  | (front end)    |   clang's AST JSON. TBD — see docs/parser.adoc.
+  +----------------+
+      |
+      v
+  +----------------+
+  | Binding IR     |   Dialect-neutral records describing functions,
+  | (in memory)    |   types, constants. Pure Pascal, no clang types.
+  +----------------+
+      |
+      +-- emit --> blaise.pas    (when --blaise)
+      |
+      +-- emit --> fpc.pas       (when --fpc)
+----
+
+The split exists so the C-side work (which is where the hard cases
+live) is decoupled from the Pascal-side work (which is mostly text
+formatting).
+
+== Non-goals
+
+* Replacing FPC's `h2pas`. We exist because `h2pas` is a sed-script
+  with a parser bolted on; we want libclang-level accuracy.
+* Compiling C code. If you want that, use a C compiler.
+* Round-tripping. Generated `.pas` files are *output*, not source of
+  truth. Edit the header (or the generator config) and re-run.
+
+== Status
+
+Pre-alpha. Project skeleton initialised; parser not started.

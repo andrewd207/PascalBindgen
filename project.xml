@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project>
+  <name>pascal_bindgen</name>
+  <version>1.0.0</version>
+  <author>andrew</author>
+  <license>BSD-3-Clause</license>
+
+  <build>
+    <projectType>application</projectType>
+    <mainSource>Main.pas</mainSource>
+    <executableName>pascal_bindgen</executableName>
+    <outputDirectory>target</outputDirectory>
+
+    <compilerOptions>
+      <option>-Flsrc/main/c</option>
+      <option>-k-rpath=\$ORIGIN/../src/main/c</option>
+    </compilerOptions>
+  </build>
+
+  <test>
+    <testSource>TestRunner.pas</testSource>
+    <frameworkOptions>
+      <option>--all --format=plain</option>
+    </frameworkOptions>
+  </test>
+</project>
