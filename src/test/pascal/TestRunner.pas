@@ -1,9 +1,16 @@
 program TestRunner;
 
+{$IFDEF FPC}
 {$mode objfpc}{$H+}
+{$ENDIF}
 
 uses
-  Classes, SysUtils, fpcunit, testregistry, consoletestrunner,
+  Classes, SysUtils,
+  {$IFDEF FPC}
+  fpcunit, testregistry, consoletestrunner,
+  {$ELSE}
+  blaise.testing, blaise.testing.runner.text,
+  {$ENDIF}
   bindgen.ir, bindgen.parser, bindgen.emit.fpc, bindgen.emit.blaise, clang.wrap;
 
 type
@@ -816,20 +823,26 @@ begin
   end;
 end;
 
+{$IFDEF FPC}
 var
   Application: TTestRunner;
+{$ENDIF}
 
 begin
+  RegisterTest(TIRTests);
+  RegisterTest(TParserTests);
+  RegisterTest(TClangTypeTests);
+  RegisterTest(TFpcEmitTests);
+  RegisterTest(TBlaiseEmitTests);
+{$IFDEF FPC}
   Application := TTestRunner.Create(nil);
   try
-    RegisterTest(TIRTests);
-    RegisterTest(TParserTests);
-    RegisterTest(TClangTypeTests);
-    RegisterTest(TFpcEmitTests);
-    RegisterTest(TBlaiseEmitTests);
     Application.Initialize;
     Application.Run;
   finally
     Application.Free;
   end;
+{$ELSE}
+  Halt(RunAll);
+{$ENDIF}
 end.
