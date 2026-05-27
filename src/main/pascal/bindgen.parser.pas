@@ -91,14 +91,32 @@ begin
   else if K = TClangTypeKinds.Enum then
     Result := TBindingType.Create(tkEnumRef, Spelling)
   else if K = TClangTypeKinds.Typedef then
-    Result := TBindingType.Create(tkTypedefRef, Spelling)
+  begin
+    Result := TBindingType.Create(tkTypedefRef, Spelling);
+    { Capture canonical primitive spelling so the FPC emitter can
+      fall back when the typedef itself is filtered out as a
+      system-header decl (e.g. 'z_size_t = size_t' where size_t
+      lives in <stddef.h>). }
+    Sub := T.Canonical;
+    try
+      if Sub.Kind <> TClangTypeKinds.Record_ then
+        Result.CanonicalSpelling := Sub.Spelling;
+    finally
+      Sub.Free;
+    end;
+  end
   else if K = TClangTypeKinds.Elaborated then
   begin
-    { "struct Foo" / "enum Bar" form — unwrap to the underlying ref. }
+    { "struct Foo" / "enum Bar" / typedef-of-anything form — unwrap
+      to the underlying. Preserve the user-facing spelling for refs
+      (so 'struct Point' stays as the tag 'Point'), but let
+      canonical primitives keep their canonical name so MapPrimitive
+      can map them ('size_t' canonical is 'unsigned long' → culong). }
     Sub := T.Canonical;
     try
       Result := BuildType(Sub);
-      Result.Spelling := Spelling;  { preserve original spelling }
+      if Result.Kind in [tkRecordRef, tkEnumRef, tkTypedefRef] then
+        Result.Spelling := Spelling;
     finally
       Sub.Free;
     end;

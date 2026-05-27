@@ -42,6 +42,7 @@ type
     FLibrary: string;
     FOutput: TStringList;
     FEmittedTypes: TStringList;
+    FDeclaredTypeNames: TStringList;
     FPointerAliases: TStringList;
     procedure Line(const S: string = '');
     procedure EmitProvenance(U: TBindingUnit);
@@ -78,6 +79,9 @@ begin
   FPointerAliases := TStringList.Create;
   FPointerAliases.Sorted := True;
   FPointerAliases.Duplicates := dupIgnore;
+  FDeclaredTypeNames := TStringList.Create;
+  FDeclaredTypeNames.Sorted := True;
+  FDeclaredTypeNames.Duplicates := dupIgnore;
 end;
 
 { FPC reserved-word table (objfpc + delphi modes). Identifiers
@@ -121,6 +125,7 @@ begin
   FOutput.Free;
   FEmittedTypes.Free;
   FPointerAliases.Free;
+  FDeclaredTypeNames.Free;
   inherited Destroy;
 end;
 
@@ -251,7 +256,15 @@ begin
         if Copy(Inner, 1, 7)  = 'struct '  then Delete(Inner, 1, 7)
         else if Copy(Inner, 1, 6) = 'union '  then Delete(Inner, 1, 6)
         else if Copy(Inner, 1, 5) = 'enum '   then Delete(Inner, 1, 5);
-        Result := Inner;
+        { Chase the canonical when the typedef itself is not in the
+          unit (filtered out as a system-header decl). 'z_size_t =
+          size_t;' would otherwise reference an undeclared name. }
+        if (T.Kind = tkTypedefRef)
+           and (FDeclaredTypeNames.IndexOf(Inner) < 0)
+           and (T.CanonicalSpelling <> '') then
+          Result := MapPrimitive(T.CanonicalSpelling)
+        else
+          Result := Inner;
       end;
     tkPrimitive:
       Result := MapPrimitive(T.Spelling);
@@ -413,6 +426,13 @@ var
 begin
   FOutput.Clear;
   FEmittedTypes.Clear;
+  FDeclaredTypeNames.Clear;
+  for I := 0 to U.Decls.Count - 1 do
+  begin
+    D := U.Decls.Items[I];
+    if not (D is TBindingFunction) then
+      FDeclaredTypeNames.Add(D.Name);
+  end;
   CollectFunctionPointerAliases(U);
   EmitProvenance(U);
   Line;

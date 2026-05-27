@@ -87,6 +87,7 @@ type
     procedure ForwardDeclThenDefinitionEmitsOnce;
     procedure ReservedWordIdentsAreEscapedAndEmittedSourceCompiles;
     procedure PointerParamAndReturnAreNamedAliasesAndCompile;
+    procedure FilteredOutTypedefChasesCanonicalPrimitive;
   end;
 
   TFpcEmitTests = class(TTestCase)
@@ -606,6 +607,66 @@ begin
       WriteLn('--- emitted source ---'); WriteLn(Src);
     end;
     AssertEquals('emitted pointer-arg source parses', 0, RC);
+  finally
+    DeleteFile(PasFile);
+    DeleteFile(OutFile);
+  end;
+end;
+
+procedure TParserTests.FilteredOutTypedefChasesCanonicalPrimitive;
+{ When a user typedef aliases a system-header typedef (e.g.
+  'my_size_t = size_t' where size_t lives in <stddef.h>), the
+  system decl is filtered out. Without B1, the unit would reference
+  an undeclared 'size_t'. With B1, the emitter must chase to the
+  canonical primitive (culong on Linux x86_64). }
+const
+  Candidates: array[0..3] of string = (
+    'sample_chain.h',
+    'src/test/resources/sample_chain.h',
+    '../src/test/resources/sample_chain.h',
+    '../../src/test/resources/sample_chain.h'
+  );
+var
+  Hdr, Src: string;
+  I, RC: Integer;
+  U: TBindingUnit;
+  E: TFpcEmitter;
+  TmpDir, PasFile, OutFile, Cmd: string;
+begin
+  Hdr := Candidates[0];
+  for I := Low(Candidates) to High(Candidates) do
+    if FileExists(Candidates[I]) then begin Hdr := Candidates[I]; Break; end;
+
+  U := ParseHeader(Hdr);
+  try
+    E := TFpcEmitter.Create('chain', 'libchain');
+    try
+      Src := E.Emit(U);
+    finally
+      E.Free;
+    end;
+  finally
+    U.Free;
+  end;
+
+  AssertTrue('chases size_t to culong',
+             Pos('my_size_t = culong', Src) > 0);
+  AssertTrue('no undeclared size_t leak',
+             Pos('= size_t', Src) = 0);
+
+  TmpDir := GetTempDir(True);
+  PasFile := IncludeTrailingPathDelimiter(TmpDir) + 'chain.pas';
+  OutFile := IncludeTrailingPathDelimiter(TmpDir) + 'chain.out';
+  WriteSnippet(PasFile, Src);
+  try
+    Cmd := Format('fpc -Cn -O- %s > %s 2>&1', [PasFile, OutFile]);
+    RC := RunShell(Cmd);
+    if RC <> 0 then
+    begin
+      WriteLn('--- fpc output ---'); WriteLn(ReadAllText(OutFile));
+      WriteLn('--- emitted source ---'); WriteLn(Src);
+    end;
+    AssertEquals('emitted typedef-chain source parses', 0, RC);
   finally
     DeleteFile(PasFile);
     DeleteFile(OutFile);

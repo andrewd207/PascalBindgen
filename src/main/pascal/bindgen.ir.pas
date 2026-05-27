@@ -51,6 +51,7 @@ type
     FSpelling: string;
     FPointee: TBindingType;   { self-ref allowed inside own class block }
     FArraySize: Int64;
+    FCanonicalSpelling: string;  { for tkTypedefRef: canonical C name }
   public
     constructor Create(AKind: TBindingTypeKind; const ASpelling: string);
     destructor Destroy; override;
@@ -58,6 +59,14 @@ type
     property Spelling: string read FSpelling write FSpelling;
     property Pointee: TBindingType read FPointee write FPointee;
     property ArraySize: Int64 read FArraySize write FArraySize;
+    { Populated for tkTypedefRef: the C spelling of the canonical
+      underlying type (e.g. 'unsigned long' for 'size_t'). Empty
+      string when the typedef points at a non-primitive (record /
+      enum / function-proto). The FPC emitter falls back to this
+      when the named typedef itself is filtered out as a system-
+      header decl, so the binding still references a known type. }
+    property CanonicalSpelling: string
+             read FCanonicalSpelling write FCanonicalSpelling;
   end;
 
   TBindingTypeList = class

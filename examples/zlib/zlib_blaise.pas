@@ -8,14 +8,14 @@ unit zlib;
 interface
 
 type
-  z_size_t = size_t;  { zconf.h:255 }
+  z_size_t = UInt64;  { zconf.h:255 }
   uInt = Cardinal;  { zconf.h:403 }
   uLong = UInt64;  { zconf.h:404 }
   Bytef = Byte;  { zconf.h:410 }
   charf = AnsiChar;  { zconf.h:412 }
   intf = Integer;  { zconf.h:413 }
-  uIntf = uInt;  { zconf.h:414 }
-  uLongf = uLong;  { zconf.h:415 }
+  uIntf = Cardinal;  { zconf.h:414 }
+  uLongf = UInt64;  { zconf.h:415 }
   voidpc = Pointer;  { zconf.h:418 }
   voidpf = Pointer;  { zconf.h:419 }
   voidp = Pointer;  { zconf.h:420 }
@@ -25,35 +25,35 @@ type
   internal_state = record  { zlib.h:84 }
   end;
   z_stream_s = record  { zlib.h:86 }
-    next_in: ^Bytef;
-    avail_in: uInt;
-    total_in: uLong;
-    next_out: ^Bytef;
-    avail_out: uInt;
-    total_out: uLong;
+    next_in: ^Byte;
+    avail_in: Cardinal;
+    total_in: UInt64;
+    next_out: ^Byte;
+    avail_out: Cardinal;
+    total_out: UInt64;
     msg: PChar;
     state: ^internal_state;
     zalloc: ^void *(void *, unsigned int, unsigned int);
     zfree: ^void (void *, void *);
     opaque: Pointer;
     data_type: Integer;
-    adler: uLong;
-    reserved: uLong;
+    adler: UInt64;
+    reserved: UInt64;
   end;
   z_stream = z_stream_s;  { zlib.h:106 }
   z_streamp = ^z_stream;  { zlib.h:108 }
   gz_header_s = record  { zlib.h:114 }
     text: Integer;
-    time: uLong;
+    time: UInt64;
     xflags: Integer;
     os: Integer;
-    extra: ^Bytef;
-    extra_len: uInt;
-    extra_max: uInt;
-    name: ^Bytef;
-    name_max: uInt;
-    comment: ^Bytef;
-    comm_max: uInt;
+    extra: ^Byte;
+    extra_len: Cardinal;
+    extra_max: Cardinal;
+    name: ^Byte;
+    name_max: Cardinal;
+    comment: ^Byte;
+    comm_max: Cardinal;
     hcrc: Integer;
     done: Integer;
   end;
@@ -70,18 +70,18 @@ function deflate(strm: ^z_stream_s; flush: Integer): Integer; external name 'def
 function deflateEnd(strm: ^z_stream_s): Integer; external name 'deflateEnd';  { zlib.h:363 }
 function inflate(strm: ^z_stream_s; flush: Integer): Integer; external name 'inflate';  { zlib.h:401 }
 function inflateEnd(strm: ^z_stream_s): Integer; external name 'inflateEnd';  { zlib.h:521 }
-function deflateSetDictionary(strm: ^z_stream_s; dictionary: ^Bytef; dictLength: uInt): Integer; external name 'deflateSetDictionary';  { zlib.h:611 }
-function deflateGetDictionary(strm: ^z_stream_s; dictionary: ^Bytef; dictLength: ^uInt): Integer; external name 'deflateGetDictionary';  { zlib.h:655 }
+function deflateSetDictionary(strm: ^z_stream_s; dictionary: ^Byte; dictLength: Cardinal): Integer; external name 'deflateSetDictionary';  { zlib.h:611 }
+function deflateGetDictionary(strm: ^z_stream_s; dictionary: ^Byte; dictLength: ^Cardinal): Integer; external name 'deflateGetDictionary';  { zlib.h:655 }
 function deflateCopy(dest: ^z_stream_s; source: ^z_stream_s): Integer; external name 'deflateCopy';  { zlib.h:677 }
 function deflateReset(strm: ^z_stream_s): Integer; external name 'deflateReset';  { zlib.h:695 }
 function deflateParams(strm: ^z_stream_s; level: Integer; strategy: Integer): Integer; external name 'deflateParams';  { zlib.h:706 }
 function deflateTune(strm: ^z_stream_s; good_length: Integer; max_lazy: Integer; nice_length: Integer; max_chain: Integer): Integer; external name 'deflateTune';  { zlib.h:744 }
-function deflateBound(strm: ^z_stream_s; sourceLen: uLong): uLong; external name 'deflateBound';  { zlib.h:761 }
+function deflateBound(strm: ^z_stream_s; sourceLen: UInt64): UInt64; external name 'deflateBound';  { zlib.h:761 }
 function deflatePending(strm: ^z_stream_s; pending: ^Cardinal; bits: ^Integer): Integer; external name 'deflatePending';  { zlib.h:776 }
 function deflatePrime(strm: ^z_stream_s; bits: Integer; value: Integer): Integer; external name 'deflatePrime';  { zlib.h:791 }
 function deflateSetHeader(strm: ^z_stream_s; head: ^gz_header_s): Integer; external name 'deflateSetHeader';  { zlib.h:808 }
-function inflateSetDictionary(strm: ^z_stream_s; dictionary: ^Bytef; dictLength: uInt): Integer; external name 'inflateSetDictionary';  { zlib.h:888 }
-function inflateGetDictionary(strm: ^z_stream_s; dictionary: ^Bytef; dictLength: ^uInt): Integer; external name 'inflateGetDictionary';  { zlib.h:911 }
+function inflateSetDictionary(strm: ^z_stream_s; dictionary: ^Byte; dictLength: Cardinal): Integer; external name 'inflateSetDictionary';  { zlib.h:888 }
+function inflateGetDictionary(strm: ^z_stream_s; dictionary: ^Byte; dictLength: ^Cardinal): Integer; external name 'inflateGetDictionary';  { zlib.h:911 }
 function inflateSync(strm: ^z_stream_s): Integer; external name 'inflateSync';  { zlib.h:926 }
 function inflateCopy(dest: ^z_stream_s; source: ^z_stream_s): Integer; external name 'inflateCopy';  { zlib.h:945 }
 function inflateReset(strm: ^z_stream_s): Integer; external name 'inflateReset';  { zlib.h:961 }
@@ -91,19 +91,19 @@ function inflateMark(strm: ^z_stream_s): Int64; external name 'inflateMark';  { 
 function inflateGetHeader(strm: ^z_stream_s; head: ^gz_header_s): Integer; external name 'inflateGetHeader';  { zlib.h:1035 }
 function inflateBack(strm: ^z_stream_s; in: ^unsigned int (void *, unsigned char **); in_desc: Pointer; out: ^int (void *, unsigned char *, unsigned int); out_desc: Pointer): Integer; external name 'inflateBack';  { zlib.h:1101 }
 function inflateBackEnd(strm: ^z_stream_s): Integer; external name 'inflateBackEnd';  { zlib.h:1171 }
-function zlibCompileFlags: uLong; external name 'zlibCompileFlags';  { zlib.h:1179 }
-function compress(dest: ^Bytef; destLen: ^uLongf; source: ^Bytef; sourceLen: uLong): Integer; external name 'compress';  { zlib.h:1232 }
-function compress2(dest: ^Bytef; destLen: ^uLongf; source: ^Bytef; sourceLen: uLong; level: Integer): Integer; external name 'compress2';  { zlib.h:1247 }
-function compressBound(sourceLen: uLong): uLong; external name 'compressBound';  { zlib.h:1263 }
-function uncompress(dest: ^Bytef; destLen: ^uLongf; source: ^Bytef; sourceLen: uLong): Integer; external name 'uncompress';  { zlib.h:1270 }
-function uncompress2(dest: ^Bytef; destLen: ^uLongf; source: ^Bytef; sourceLen: ^uLong): Integer; external name 'uncompress2';  { zlib.h:1288 }
+function zlibCompileFlags: UInt64; external name 'zlibCompileFlags';  { zlib.h:1179 }
+function compress(dest: ^Byte; destLen: ^UInt64; source: ^Byte; sourceLen: UInt64): Integer; external name 'compress';  { zlib.h:1232 }
+function compress2(dest: ^Byte; destLen: ^UInt64; source: ^Byte; sourceLen: UInt64; level: Integer): Integer; external name 'compress2';  { zlib.h:1247 }
+function compressBound(sourceLen: UInt64): UInt64; external name 'compressBound';  { zlib.h:1263 }
+function uncompress(dest: ^Byte; destLen: ^UInt64; source: ^Byte; sourceLen: UInt64): Integer; external name 'uncompress';  { zlib.h:1270 }
+function uncompress2(dest: ^Byte; destLen: ^UInt64; source: ^Byte; sourceLen: ^UInt64): Integer; external name 'uncompress2';  { zlib.h:1288 }
 function gzdopen(fd: Integer; mode: PChar): ^gzFile_s; external name 'gzdopen';  { zlib.h:1345 }
 function gzbuffer(file: ^gzFile_s; size: Cardinal): Integer; external name 'gzbuffer';  { zlib.h:1368 }
 function gzsetparams(file: ^gzFile_s; level: Integer; strategy: Integer): Integer; external name 'gzsetparams';  { zlib.h:1384 }
 function gzread(file: ^gzFile_s; buf: Pointer; len: Cardinal): Integer; external name 'gzread';  { zlib.h:1395 }
-function gzfread(buf: Pointer; size: z_size_t; nitems: z_size_t; file: ^gzFile_s): z_size_t; external name 'gzfread';  { zlib.h:1425 }
+function gzfread(buf: Pointer; size: UInt64; nitems: UInt64; file: ^gzFile_s): UInt64; external name 'gzfread';  { zlib.h:1425 }
 function gzwrite(file: ^gzFile_s; buf: Pointer; len: Cardinal): Integer; external name 'gzwrite';  { zlib.h:1451 }
-function gzfwrite(buf: Pointer; size: z_size_t; nitems: z_size_t; file: ^gzFile_s): z_size_t; external name 'gzfwrite';  { zlib.h:1457 }
+function gzfwrite(buf: Pointer; size: UInt64; nitems: UInt64; file: ^gzFile_s): UInt64; external name 'gzfwrite';  { zlib.h:1457 }
 function gzprintf(file: ^gzFile_s; format: PChar): Integer; external name 'gzprintf'  { varargs — Blaise has no varargs syntax yet, call via wrapper };  { zlib.h:1471 }
 function gzputs(file: ^gzFile_s; s: PChar): Integer; external name 'gzputs';  { zlib.h:1486 }
 function gzgets(file: ^gzFile_s; buf: PChar; len: Integer): PChar; external name 'gzgets';  { zlib.h:1494 }
@@ -119,11 +119,11 @@ function gzclose_r(file: ^gzFile_s): Integer; external name 'gzclose_r';  { zlib
 function gzclose_w(file: ^gzFile_s): Integer; external name 'gzclose_w';  { zlib.h:1648 }
 function gzerror(file: ^gzFile_s; errnum: ^Integer): PChar; external name 'gzerror';  { zlib.h:1659 }
 procedure gzclearerr(file: ^gzFile_s); external name 'gzclearerr';  { zlib.h:1675 }
-function adler32(adler: uLong; buf: ^Bytef; len: uInt): uLong; external name 'adler32';  { zlib.h:1692 }
-function adler32_z(adler: uLong; buf: ^Bytef; len: z_size_t): uLong; external name 'adler32_z';  { zlib.h:1712 }
-function crc32(crc: uLong; buf: ^Bytef; len: uInt): uLong; external name 'crc32';  { zlib.h:1730 }
-function crc32_z(crc: uLong; buf: ^Bytef; len: z_size_t): uLong; external name 'crc32_z';  { zlib.h:1748 }
-function crc32_combine_op(crc1: uLong; crc2: uLong; op: uLong): uLong; external name 'crc32_combine_op';  { zlib.h:1771 }
+function adler32(adler: UInt64; buf: ^Byte; len: Cardinal): UInt64; external name 'adler32';  { zlib.h:1692 }
+function adler32_z(adler: UInt64; buf: ^Byte; len: UInt64): UInt64; external name 'adler32_z';  { zlib.h:1712 }
+function crc32(crc: UInt64; buf: ^Byte; len: Cardinal): UInt64; external name 'crc32';  { zlib.h:1730 }
+function crc32_z(crc: UInt64; buf: ^Byte; len: UInt64): UInt64; external name 'crc32_z';  { zlib.h:1748 }
+function crc32_combine_op(crc1: UInt64; crc2: UInt64; op: UInt64): UInt64; external name 'crc32_combine_op';  { zlib.h:1771 }
 function deflateInit_(strm: ^z_stream_s; level: Integer; version: PChar; stream_size: Integer): Integer; external name 'deflateInit_';  { zlib.h:1784 }
 function inflateInit_(strm: ^z_stream_s; version: PChar; stream_size: Integer): Integer; external name 'inflateInit_';  { zlib.h:1786 }
 function deflateInit2_(strm: ^z_stream_s; level: Integer; method: Integer; windowBits: Integer; memLevel: Integer; strategy: Integer; version: PChar; stream_size: Integer): Integer; external name 'deflateInit2_';  { zlib.h:1788 }
@@ -131,15 +131,15 @@ function inflateInit2_(strm: ^z_stream_s; windowBits: Integer; version: PChar; s
 function inflateBackInit_(strm: ^z_stream_s; windowBits: Integer; window: ^Byte; version: PChar; stream_size: Integer): Integer; external name 'inflateBackInit_';  { zlib.h:1794 }
 function gzgetc_(file: ^gzFile_s): Integer; external name 'gzgetc_';  { zlib.h:1842 }
 function gzopen(arg1: PChar; arg2: PChar): ^gzFile_s; external name 'gzopen';  { zlib.h:1896 }
-function gzseek(arg1: ^gzFile_s; arg2: off_t; arg3: Integer): off_t; external name 'gzseek';  { zlib.h:1897 }
-function gztell(arg1: ^gzFile_s): off_t; external name 'gztell';  { zlib.h:1898 }
-function gzoffset(arg1: ^gzFile_s): off_t; external name 'gzoffset';  { zlib.h:1899 }
-function adler32_combine(arg1: uLong; arg2: uLong; arg3: off_t): uLong; external name 'adler32_combine';  { zlib.h:1900 }
-function crc32_combine(arg1: uLong; arg2: uLong; arg3: off_t): uLong; external name 'crc32_combine';  { zlib.h:1901 }
-function crc32_combine_gen(arg1: off_t): uLong; external name 'crc32_combine_gen';  { zlib.h:1902 }
+function gzseek(arg1: ^gzFile_s; arg2: Int64; arg3: Integer): Int64; external name 'gzseek';  { zlib.h:1897 }
+function gztell(arg1: ^gzFile_s): Int64; external name 'gztell';  { zlib.h:1898 }
+function gzoffset(arg1: ^gzFile_s): Int64; external name 'gzoffset';  { zlib.h:1899 }
+function adler32_combine(arg1: UInt64; arg2: UInt64; arg3: Int64): UInt64; external name 'adler32_combine';  { zlib.h:1900 }
+function crc32_combine(arg1: UInt64; arg2: UInt64; arg3: Int64): UInt64; external name 'crc32_combine';  { zlib.h:1901 }
+function crc32_combine_gen(arg1: Int64): UInt64; external name 'crc32_combine_gen';  { zlib.h:1902 }
 function zError(arg1: Integer): PChar; external name 'zError';  { zlib.h:1914 }
 function inflateSyncPoint(arg1: ^z_stream_s): Integer; external name 'inflateSyncPoint';  { zlib.h:1915 }
-function get_crc_table: ^z_crc_t; external name 'get_crc_table';  { zlib.h:1916 }
+function get_crc_table: ^Cardinal; external name 'get_crc_table';  { zlib.h:1916 }
 function inflateUndermine(arg1: ^z_stream_s; arg2: Integer): Integer; external name 'inflateUndermine';  { zlib.h:1917 }
 function inflateValidate(arg1: ^z_stream_s; arg2: Integer): Integer; external name 'inflateValidate';  { zlib.h:1918 }
 function inflateCodesUsed(arg1: ^z_stream_s): UInt64; external name 'inflateCodesUsed';  { zlib.h:1919 }
