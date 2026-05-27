@@ -86,44 +86,32 @@ canonical primitive. Even once gap §1 is fixed, `Bytef` would still
 need to resolve to `Byte` or `cuchar` rather than stop at the
 typedef name.
 
-=== 5. Anonymous pointer types in parameter lists
+=== 5. Anonymous pointer types in parameter lists (FIXED)
 
-The biggest single emitter bug. FPC (both `objfpc` and `delphi`
-modes) rejects `^X` as a parameter type — anonymous pointer types
-are only allowed in record fields and variable declarations, never
-in function/procedure parameter lists:
+*Status: fixed.* The FPC emitter pre-walks every function in the
+unit, collects pointee names that appear as a parameter or return
+type, and emits a `P<X> = ^<X>` alias for each at the bottom of the
+type section. Signatures then refer to the alias name. The
+regenerated `zlib_fpc.pas` carries `PBytef`, `PuLongf`, `Pz_stream_s`,
+`PuInt`, `PgzFile_s`, etc., and every pointer-parameter function
+uses them in place of inline `^X`.
 
-[source]
-----
-demo.pas(31,25) Error: Type identifier expected
-----
+Inline `^X` in record fields and typedef RHS stays — FPC accepts it
+there, so we do not invent unnecessary aliases.
 
-zlib's API has pointer parameters on almost every function
-(`compress(Bytef *dest, ...)` etc.), so this hits *every other
-function declaration* in the generated output. The demo works
-around it by hand-aliasing `PBytef = ^Bytef` / `PuLongf = ^uLongf`
-and using those names instead.
+=== 6. Duplicate type declarations (FIXED)
 
-Fix path: in `bindgen.emit.fpc`, when emitting a parameter whose
-type spells out as `^T`, ensure a named `PT = ^T` alias exists in
-the type section and substitute the alias at the use site.
+*Status: fixed.* The emitters maintain a per-`Emit()` set of
+already-written type names; `EmitDecl` short-circuits on dupes.
+`gzFile_s` now appears exactly once in `zlib_fpc.pas`.
 
-=== 6. Duplicate type declarations
+=== 7. Reserved-word collisions (FIXED for FPC)
 
-The emitter walks the cursor tree and emits both `gzFile_s = record`
-(from the struct decl) and another `gzFile_s = ...` later when it
-chases a typedef pointing at it. FPC rejects the second one with
-"Duplicate identifier".
-
-Fix path: track already-emitted spellings during a single emit pass.
-
-=== 7. Reserved-word collisions
-
-Parameter names like `file`, `in`, `out`, `mode` collide with Pascal
-reserved words and are not escaped. FPC rejects them outright. This
-is documented as a v1 cut in the emitter header comment; the fix is
-to prepend `&` (FPC) or rename (a future Blaise emitter feature) on
-detection.
+*Status: fixed for the FPC emitter; Blaise side deferred (Phase C).*
+The FPC emitter wraps every emitted identifier through an
+`EscapeIdent` helper that prepends `&` when the name hits a 68-word
+reserved table. The zlib output now shows `&in`, `&out`, `&file`
+where C-side parameters collide.
 
 == Reproducing
 
@@ -145,14 +133,18 @@ compressed 149 -> 36 bytes
 round-trip OK
 ----
 
-== What this tells us about v1 priority
+== Phase A status
 
-The four gaps that *block* a one-line consumable `.pas` file are
-§1 (include filter), §5 (named pointer aliases), §6 (no duplicates),
-and §7 (reserved-word escaping). §2 (function-pointer typedefs) and
-§3 (macros) block specific *features* but most callers can live
-with `Pointer` and hard-coded constants in the short term.
+Phase A (gaps §1, §5, §6, §7 — the four that *block* a usable .pas
+file) is complete. The regenerated `zlib_fpc.pas` now gets through
+most of `fpc -Cn` cleanly; what's left are §2 (function-pointer
+typedefs render to C-syntax garbage) and §4 (a downstream effect:
+`z_size_t = size_t;` references `size_t` from `<stddef.h>`, which
+is correctly filtered out as a system header but the chain isn't
+unwrapped to its canonical primitive). Both are Phase B items.
 
 The sample header in `src/test/resources/sample.h` was carefully
-constructed to avoid every one of these — which is why the test
-suite stays green while a real header still does not compile.
+constructed to avoid every one of these, which is why the existing
+test suite stayed green throughout — and the new regression tests
+in `sample_with_include.h` / `sample_dup.h` / `sample_reserved.h` /
+`sample_ptr.h` exercise each Phase A fix in isolation.

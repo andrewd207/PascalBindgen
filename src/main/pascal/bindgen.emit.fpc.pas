@@ -42,6 +42,7 @@ type
     FLibrary: string;
     FOutput: TStringList;
     FEmittedTypes: TStringList;
+    FPointerAliases: TStringList;
     procedure Line(const S: string = '');
     procedure EmitProvenance(U: TBindingUnit);
     procedure EmitDecl(D: TBindingDecl);
@@ -50,8 +51,13 @@ type
     procedure EmitEnum(E: TBindingEnum);
     procedure EmitTypedef(T: TBindingTypedef);
     function  MapType(T: TBindingType): string;
+    { Like MapType, but if the result is an inline pointer ('^X')
+      it registers and returns a named alias 'PX = ^X' — required
+      because FPC rejects '^X' as a parameter or return type. }
+    function  MapTypeForSig(T: TBindingType): string;
     function  LocComment(const Loc: TSourceLoc): string;
     function  EscapeIdent(const S: string): string;
+    procedure CollectFunctionPointerAliases(U: TBindingUnit);
   public
     constructor Create(const AUnitName, ALibrary: string);
     destructor Destroy; override;
@@ -69,6 +75,9 @@ begin
   FEmittedTypes := TStringList.Create;
   FEmittedTypes.Sorted := True;
   FEmittedTypes.Duplicates := dupIgnore;
+  FPointerAliases := TStringList.Create;
+  FPointerAliases.Sorted := True;
+  FPointerAliases.Duplicates := dupIgnore;
 end;
 
 { FPC reserved-word table (objfpc + delphi modes). Identifiers
@@ -110,6 +119,7 @@ destructor TFpcEmitter.Destroy;
 begin
   FOutput.Free;
   FEmittedTypes.Free;
+  FPointerAliases.Free;
   inherited Destroy;
 end;
 
@@ -165,6 +175,41 @@ begin
   else if S = 'double'                then Result := 'cdouble'
   else if S = 'long double'           then Result := 'clongdouble'
   else Result := S;  { caller's problem: must be a previously declared type }
+end;
+
+function TFpcEmitter.MapTypeForSig(T: TBindingType): string;
+var
+  Raw, Pointee: string;
+begin
+  Raw := MapType(T);
+  if (Length(Raw) >= 2) and (Raw[1] = '^') then
+  begin
+    Pointee := Copy(Raw, 2, MaxInt);
+    Result := 'P' + Pointee;
+    FPointerAliases.Add(Pointee);
+  end
+  else
+    Result := Raw;
+end;
+
+procedure TFpcEmitter.CollectFunctionPointerAliases(U: TBindingUnit);
+var
+  I, J: Integer;
+  D: TBindingDecl;
+  F: TBindingFunction;
+  Discard: string;
+begin
+  FPointerAliases.Clear;
+  for I := 0 to U.Decls.Count - 1 do
+  begin
+    D := U.Decls.Items[I];
+    if not (D is TBindingFunction) then Continue;
+    F := TBindingFunction(D);
+    Discard := MapTypeForSig(F.ReturnType);
+    for J := 0 to F.Params.Count - 1 do
+      Discard := MapTypeForSig(F.Params.Items[J].ParamType);
+  end;
+  if Discard = '' then ;  { suppress unused-warning }
 end;
 
 function TFpcEmitter.MapType(T: TBindingType): string;
@@ -248,13 +293,13 @@ begin
     if ParamName = '' then ParamName := Format('arg%d', [I + 1]);
     ParamName := EscapeIdent(ParamName);
     if P.IsConst then
-      Params := Params + 'const ' + ParamName + ': ' + MapType(P.ParamType)
+      Params := Params + 'const ' + ParamName + ': ' + MapTypeForSig(P.ParamType)
     else
-      Params := Params + ParamName + ': ' + MapType(P.ParamType);
+      Params := Params + ParamName + ': ' + MapTypeForSig(P.ParamType);
   end;
   if Params <> '' then Params := '(' + Params + ')';
 
-  RetType := MapType(F.ReturnType);
+  RetType := MapTypeForSig(F.ReturnType);
   Modifiers := 'cdecl';
   if F.IsVarArgs then Modifiers := Modifiers + '; varargs';
   if FLibrary <> '' then
@@ -367,6 +412,7 @@ var
 begin
   FOutput.Clear;
   FEmittedTypes.Clear;
+  CollectFunctionPointerAliases(U);
   EmitProvenance(U);
   Line;
   Line(Format('unit %s;', [FUnitName]));
@@ -389,13 +435,22 @@ begin
     else HasFuncs := True;
   end;
 
-  if HasTypes then
+  if HasTypes or (FPointerAliases.Count > 0) then
   begin
     Line('type');
     for I := 0 to U.Decls.Count - 1 do
     begin
       D := U.Decls.Items[I];
       if not (D is TBindingFunction) then EmitDecl(D);
+    end;
+    { Synthesized 'P<X> = ^X' aliases for every pointee that appears
+      as a function parameter or return type. FPC rejects inline '^X'
+      in signatures; record fields and typedef RHS keep using '^X'. }
+    if FPointerAliases.Count > 0 then
+    begin
+      for I := 0 to FPointerAliases.Count - 1 do
+        Line(Format('  P%s = ^%s;',
+                    [FPointerAliases[I], FPointerAliases[I]]));
     end;
     Line;
   end;

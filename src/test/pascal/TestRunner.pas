@@ -86,6 +86,7 @@ type
     procedure UserIncludeDeclsAreEmittedSystemHeadersAreNot;
     procedure ForwardDeclThenDefinitionEmitsOnce;
     procedure ReservedWordIdentsAreEscapedAndEmittedSourceCompiles;
+    procedure PointerParamAndReturnAreNamedAliasesAndCompile;
   end;
 
   TFpcEmitTests = class(TTestCase)
@@ -545,6 +546,66 @@ begin
       WriteLn(Src);
     end;
     AssertEquals('emitted reserved-words source parses', 0, RC);
+  finally
+    DeleteFile(PasFile);
+    DeleteFile(OutFile);
+  end;
+end;
+
+procedure TParserTests.PointerParamAndReturnAreNamedAliasesAndCompile;
+{ Bare '^Widget' as a parameter or return type is rejected by FPC.
+  The emitter must synthesise 'PWidget = ^Widget;' once at the top
+  of the type section and substitute that name at sig sites. Whole
+  output must round-trip through fpc -Cn. }
+const
+  Candidates: array[0..3] of string = (
+    'sample_ptr.h',
+    'src/test/resources/sample_ptr.h',
+    '../src/test/resources/sample_ptr.h',
+    '../../src/test/resources/sample_ptr.h'
+  );
+var
+  Hdr, Src: string;
+  I, RC: Integer;
+  U: TBindingUnit;
+  E: TFpcEmitter;
+  TmpDir, PasFile, OutFile, Cmd: string;
+begin
+  Hdr := Candidates[0];
+  for I := Low(Candidates) to High(Candidates) do
+    if FileExists(Candidates[I]) then begin Hdr := Candidates[I]; Break; end;
+
+  U := ParseHeader(Hdr);
+  try
+    E := TFpcEmitter.Create('ptr', 'libptr');
+    try
+      Src := E.Emit(U);
+    finally
+      E.Free;
+    end;
+  finally
+    U.Free;
+  end;
+
+  AssertTrue('PWidget alias declared', Pos('PWidget = ^Widget;', Src) > 0);
+  AssertTrue('uses PWidget as param',  Pos(': PWidget', Src) > 0);
+  AssertTrue('uses PWidget as return', Pos('): PWidget', Src) > 0);
+  AssertTrue('no inline ^Widget in signature',
+             Pos(': ^Widget', Src) = 0);
+
+  TmpDir := GetTempDir(True);
+  PasFile := IncludeTrailingPathDelimiter(TmpDir) + 'ptr.pas';
+  OutFile := IncludeTrailingPathDelimiter(TmpDir) + 'ptr.out';
+  WriteSnippet(PasFile, Src);
+  try
+    Cmd := Format('fpc -Cn -O- %s > %s 2>&1', [PasFile, OutFile]);
+    RC := RunShell(Cmd);
+    if RC <> 0 then
+    begin
+      WriteLn('--- fpc output ---'); WriteLn(ReadAllText(OutFile));
+      WriteLn('--- emitted source ---'); WriteLn(Src);
+    end;
+    AssertEquals('emitted pointer-arg source parses', 0, RC);
   finally
     DeleteFile(PasFile);
     DeleteFile(OutFile);
