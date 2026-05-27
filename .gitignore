@@ -4,3 +4,4 @@ target/
 examples/gtk4/demo
 examples/vulkan/demo
 examples/blaise-vulkan/demo
+examples/blaise-gtk4/demo
