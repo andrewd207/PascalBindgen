@@ -1,0 +1,96 @@
+= zlib bindings — first non-trivial example
+:toc:
+
+A worked example of `pascal_bindgen` against a real-world C header
+(`/usr/include/zlib.h`, ~1.9 K LOC). Run `./generate.sh` from the
+repo root to regenerate the two `.pas` files.
+
+== What lands cleanly
+
+* All public function declarations (~85 entries: deflate/inflate
+  variants, gz_* file helpers, adler32/crc32, etc.)
+* Functions with multi-argument signatures, return types, and
+  `va_list`-style varargs (e.g. `gzprintf`).
+* The concrete `z_stream_s` struct (passed by `^z_stream_s` everywhere
+  in the API).
+* The empty/opaque-marker `internal_state` record.
+* Doxygen-style block comments preceding each function carry through
+  as `(* ... *)` blocks above the `external` declarations.
+* Provenance header at the top of each file lists the source path so
+  the binding is traceable back to the upstream header.
+
+== What does not work yet
+
+These are *known* limitations surfaced by this example — they were
+not regressions caused by the zlib run. Each becomes a v1 issue to
+tackle next.
+
+=== 1. Typedefs from `#include`d headers are dropped
+
+zlib defines its public typedefs in `zconf.h`, which `zlib.h`
+includes. Names like `voidpf`, `uInt`, `Bytef`, `uLong`, `gzFile`,
+`z_off_t`, `z_size_t`, `z_streamp` therefore live "outside the main
+file" and the parser's `clang_Location_isFromMainFile` filter throws
+them away.
+
+Effect: the generated bindings reference these names in field types
+and parameter lists without ever declaring them, so the output will
+not compile as-is. Hand-writing a small `zconf.pas` preamble that
+maps the affected names is the current workaround.
+
+Fix path: relax the location filter from "main file only" to
+"non-system header" — i.e. admit anything libclang resolves under a
+non-`<>` include path, while still skipping `<stdio.h>` / `<stddef.h>`
+and the like.
+
+=== 2. Function-pointer typedefs render to garbage
+
+The v1 emitters do not synthesise Pascal procedural types. zlib's
+`alloc_func` / `free_func` typedefs come out as:
+
+[source,pascal]
+----
+alloc_func = ^voidpf (voidpf, uInt, uInt);
+free_func  = ^void (voidpf, voidpf);
+----
+
+— literal C return-then-args spelling rather than the legal Pascal
+form (e.g. `function (opaque, items, size: ...): voidpf; cdecl;`).
+The same shows up inside `z_stream_s.zalloc` / `.zfree` field types.
+
+Fix path: detect `tkPrimitive` whose spelling parses as a function
+pointer (or, better, add a dedicated `tkFuncPtr` IR kind populated
+from libclang's `CXTypeKind_FunctionProto`) and route both emitters
+through a per-dialect procedural-type writer.
+
+=== 3. Macros are silently skipped
+
+zlib exports a few status codes (`Z_OK`, `Z_STREAM_END`, etc.) and
+flush constants (`Z_NO_FLUSH`, ...) as `#define` macros. The parser
+runs with detailed preprocessing off and surfaces no `LossReason`
+entries for these yet.
+
+Fix path: turn on `CXTranslationUnit_DetailedPreprocessingRecord`,
+filter `MacroDef` cursors for integer-literal-only bodies, and emit
+them as a `const` section alongside the enum constants.
+
+=== 4. Underlying primitive aliases not chased
+
+Pascal can express `uInt = Cardinal;` cleanly. Even when the typedef
+itself is dropped (gap #1), the *use sites* could chase one level
+through `CXCursor_TypedefDeclUnderlyingType` and emit the canonical
+primitive. The v1 emitter prints the typedef spelling verbatim
+instead.
+
+== Verifying the output
+
+`fpc -Cn examples/zlib/zlib_fpc.pas` currently fails at the
+undeclared `voidpf` etc. — that is gap #1. Once a hand-written
+`zconf.pas` preamble is dropped in (or gap #1 is fixed), `fpc -Cn`
+parses the rest of the unit cleanly.
+
+Run `pasbuild test` from the repo root for the regression suite —
+its `TFpcEmitTests.EmittedSourceCompilesUnderFpc` and
+`TBlaiseEmitTests.EmittedSourceCompilesUnderBlaise` tests exercise
+the emitters against the smaller `src/test/resources/sample.h`,
+which uses only self-contained types and so passes cleanly.
