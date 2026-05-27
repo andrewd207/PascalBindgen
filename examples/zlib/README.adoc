@@ -47,25 +47,24 @@ A few system-typedef use sites still leak via gap §4 — e.g.
 and is therefore not declared. Resolving §4 (typedef-chain
 unwrapping) maps these to canonical primitives at the use site.
 
-=== 2. Function-pointer typedefs render to garbage
+=== 2. Function-pointer typedefs render to garbage (FIXED)
 
-The v1 emitters do not synthesise Pascal procedural types. zlib's
-`alloc_func` / `free_func` typedefs come out as
+*Status: fixed.* The parser now detects `CXTypeKind_FunctionProto`
+under any pointer or typedef and builds a `tkFunctionPointer` IR
+node carrying the return type and ordered argument types. Both
+emitters render Pascal procedural types:
 
 [source,pascal]
 ----
-alloc_func = ^voidpf (voidpf, uInt, uInt);
-free_func  = ^void (voidpf, voidpf);
+alloc_func = function(arg1: Pointer; arg2: cuint; arg3: cuint): Pointer; cdecl;
+free_func  = procedure(arg1: Pointer; arg2: Pointer); cdecl;
 ----
 
-— literal C return-then-args spelling rather than the legal Pascal
-form (`function (...): voidpf; cdecl;`). The same shows up inside
-`z_stream_s.zalloc` / `.zfree`, plus the `in_func` / `out_func`
-typedefs and any function that takes them as parameters
-(`inflateBack`).
-
-Fix path: detect `CXTypeKind_FunctionProto` underlying types and
-route both emitters through a per-dialect procedural-type writer.
+The same form appears inside `z_stream_s.zalloc` / `.zfree`,
+`in_func` / `out_func`, and `inflateBack`'s parameters (which now
+reference the typedef names directly instead of inlining the
+proto). Blaise output is the same minus `cdecl` (Blaise hasn't
+grown calling-conv syntax yet).
 
 === 3. Macros are silently skipped
 
@@ -78,13 +77,14 @@ Fix path: turn on `CXTranslationUnit_DetailedPreprocessingRecord`,
 filter `MacroDef` cursors for integer-literal-only bodies, and emit
 them as a `const` section alongside the enum constants.
 
-=== 4. Typedef-chain unwrapping is one-shot
+=== 4. Typedef-chain unwrapping is one-shot (FIXED)
 
-When a typedef references another typedef-of-primitive, the emitter
-prints the spelling verbatim instead of chasing one more hop to the
-canonical primitive. Even once gap §1 is fixed, `Bytef` would still
-need to resolve to `Byte` or `cuchar` rather than stop at the
-typedef name.
+*Status: fixed.* `TBindingType` now carries a `CanonicalSpelling`
+populated from libclang's canonical type. When a user typedef
+references a system-header typedef that was filtered out
+(`z_size_t = size_t` with `size_t` from `<stddef.h>`), the FPC
+emitter falls back to `MapPrimitive(CanonicalSpelling)` and emits
+`z_size_t = culong`.
 
 === 5. Anonymous pointer types in parameter lists (FIXED)
 
@@ -133,15 +133,18 @@ compressed 149 -> 36 bytes
 round-trip OK
 ----
 
-== Phase A status
+== Phase A / B status
 
-Phase A (gaps §1, §5, §6, §7 — the four that *block* a usable .pas
-file) is complete. The regenerated `zlib_fpc.pas` now gets through
-most of `fpc -Cn` cleanly; what's left are §2 (function-pointer
-typedefs render to C-syntax garbage) and §4 (a downstream effect:
-`z_size_t = size_t;` references `size_t` from `<stddef.h>`, which
-is correctly filtered out as a system header but the chain isn't
-unwrapped to its canonical primitive). Both are Phase B items.
+Phases A and B (gaps §1, §2, §4, §5, §6, §7) are complete. The
+regenerated `zlib_fpc.pas` now `fpc -Cn`s with a single remaining
+error: `gzvprintf` takes a `va_list` parameter (`struct
+__va_list_tag[1]` after glibc expansion). That's a platform-ABI
+construct outside the IR's current vocabulary; the variadic
+counterpart `gzprintf` works via `varargs` already. Skipping
+`va_list`-typed decls is a tiny follow-up.
+
+Gap §3 (macro constants) is still open and is the remaining
+Phase B item.
 
 The sample header in `src/test/resources/sample.h` was carefully
 constructed to avoid every one of these, which is why the existing

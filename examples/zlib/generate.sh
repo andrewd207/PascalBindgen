@@ -16,9 +16,12 @@ if [ ! -f "$HEADER" ]; then
   exit 1
 fi
 
-"$BIN" --header "$HEADER" --fpc    --library libz --unit-name zlib \
+# Unit name MUST match the file name (FPC rule). 'zlib' itself
+# collides with the FPC RTL's built-in zlib unit, so we use a
+# disambiguating suffix.
+"$BIN" --header "$HEADER" --fpc    --library libz --unit-name zlib_fpc \
        --output "$OUT_DIR/zlib_fpc.pas"
-"$BIN" --header "$HEADER" --blaise --library libz --unit-name zlib \
+"$BIN" --header "$HEADER" --blaise --library libz --unit-name zlib_blaise \
        --output "$OUT_DIR/zlib_blaise.pas"
 
 echo "wrote $OUT_DIR/zlib_fpc.pas and $OUT_DIR/zlib_blaise.pas"

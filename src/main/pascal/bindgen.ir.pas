@@ -45,6 +45,8 @@ type
     tkFunctionPointer
   );
 
+  TBindingTypeList = class;  { forward — TBindingType references it below }
+
   TBindingType = class
   private
     FKind: TBindingTypeKind;
@@ -52,6 +54,8 @@ type
     FPointee: TBindingType;   { self-ref allowed inside own class block }
     FArraySize: Int64;
     FCanonicalSpelling: string;  { for tkTypedefRef: canonical C name }
+    FFuncReturn: TBindingType;   { for tkFunctionPointer: return type }
+    FFuncParams: TBindingTypeList; { for tkFunctionPointer: parameter types }
   public
     constructor Create(AKind: TBindingTypeKind; const ASpelling: string);
     destructor Destroy; override;
@@ -59,6 +63,9 @@ type
     property Spelling: string read FSpelling write FSpelling;
     property Pointee: TBindingType read FPointee write FPointee;
     property ArraySize: Int64 read FArraySize write FArraySize;
+    { Populated for tkFunctionPointer. Owned by this TBindingType. }
+    property FuncReturn: TBindingType read FFuncReturn write FFuncReturn;
+    property FuncParams: TBindingTypeList read FFuncParams write FFuncParams;
     { Populated for tkTypedefRef: the C spelling of the canonical
       underlying type (e.g. 'unsigned long' for 'size_t'). Empty
       string when the typedef points at a non-primitive (record /
@@ -445,6 +452,8 @@ end;
 destructor TBindingType.Destroy;
 begin
   FPointee.Free;
+  FFuncReturn.Free;
+  FFuncParams.Free;
   inherited Destroy;
 end;
 

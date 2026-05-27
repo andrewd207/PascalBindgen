@@ -122,7 +122,8 @@ end;
 
 function TBlaiseEmitter.MapType(T: TBindingType): string;
 var
-  Inner: string;
+  Inner, Params, Ret: string;
+  J: Integer;
 begin
   if T = nil then begin Result := 'Pointer'; Exit; end;
   case T.Kind of
@@ -157,6 +158,24 @@ begin
         else if Copy(Inner, 1, 6) = 'union '   then Delete(Inner, 1, 6)
         else if Copy(Inner, 1, 5) = 'enum '    then Delete(Inner, 1, 5);
         Result := Inner;
+      end;
+    tkFunctionPointer:
+      begin
+        Params := '';
+        if T.FuncParams <> nil then
+          for J := 0 to T.FuncParams.Count - 1 do
+          begin
+            if Params <> '' then Params := Params + '; ';
+            Params := Params + Format('arg%d: %s',
+              [J + 1, MapType(T.FuncParams.Items[J])]);
+          end;
+        if Params <> '' then Params := '(' + Params + ')';
+        if T.FuncReturn = nil then Ret := ''
+        else Ret := MapType(T.FuncReturn);
+        if Ret = '' then
+          Result := Format('procedure%s', [Params])
+        else
+          Result := Format('function%s: %s', [Params, Ret]);
       end;
     tkPrimitive:
       Result := MapPrimitive(T.Spelling);

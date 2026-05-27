@@ -88,6 +88,7 @@ type
     procedure ReservedWordIdentsAreEscapedAndEmittedSourceCompiles;
     procedure PointerParamAndReturnAreNamedAliasesAndCompile;
     procedure FilteredOutTypedefChasesCanonicalPrimitive;
+    procedure FunctionPointerTypedefBecomesProceduralType;
   end;
 
   TFpcEmitTests = class(TTestCase)
@@ -667,6 +668,70 @@ begin
       WriteLn('--- emitted source ---'); WriteLn(Src);
     end;
     AssertEquals('emitted typedef-chain source parses', 0, RC);
+  finally
+    DeleteFile(PasFile);
+    DeleteFile(OutFile);
+  end;
+end;
+
+procedure TParserTests.FunctionPointerTypedefBecomesProceduralType;
+{ B2: typedef'd function pointers, struct fields of that type, and
+  inline function-pointer fields must all render as Pascal procedural
+  types ('function(...): T; cdecl') rather than raw C-syntax garbage. }
+const
+  Candidates: array[0..3] of string = (
+    'sample_funcptr.h',
+    'src/test/resources/sample_funcptr.h',
+    '../src/test/resources/sample_funcptr.h',
+    '../../src/test/resources/sample_funcptr.h'
+  );
+var
+  Hdr, Src: string;
+  I, RC: Integer;
+  U: TBindingUnit;
+  E: TFpcEmitter;
+  TmpDir, PasFile, OutFile, Cmd: string;
+begin
+  Hdr := Candidates[0];
+  for I := Low(Candidates) to High(Candidates) do
+    if FileExists(Candidates[I]) then begin Hdr := Candidates[I]; Break; end;
+
+  U := ParseHeader(Hdr);
+  try
+    E := TFpcEmitter.Create('funcptr', 'libfuncptr');
+    try
+      Src := E.Emit(U);
+    finally
+      E.Free;
+    end;
+  finally
+    U.Free;
+  end;
+
+  AssertTrue('compare_fn renders as Pascal procedural type',
+             Pos('compare_fn = function', Src) > 0);
+  AssertTrue('compare_fn carries cdecl',
+             Pos('cdecl', Src) > 0);
+  AssertTrue('no raw C function-pointer syntax in output',
+             Pos('(*)', Src) = 0);
+  AssertTrue('inline void-returning field is a procedure',
+             Pos('on_swap: procedure', Src) > 0);
+  AssertTrue('typedef name preserved in sort_run parameter (not inlined)',
+             Pos('cb: compare_fn', Src) > 0);
+
+  TmpDir := GetTempDir(True);
+  PasFile := IncludeTrailingPathDelimiter(TmpDir) + 'funcptr.pas';
+  OutFile := IncludeTrailingPathDelimiter(TmpDir) + 'funcptr.out';
+  WriteSnippet(PasFile, Src);
+  try
+    Cmd := Format('fpc -Cn -O- %s > %s 2>&1', [PasFile, OutFile]);
+    RC := RunShell(Cmd);
+    if RC <> 0 then
+    begin
+      WriteLn('--- fpc output ---'); WriteLn(ReadAllText(OutFile));
+      WriteLn('--- emitted source ---'); WriteLn(Src);
+    end;
+    AssertEquals('emitted function-pointer source compiles', 0, RC);
   finally
     DeleteFile(PasFile);
     DeleteFile(OutFile);

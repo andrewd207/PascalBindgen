@@ -56,9 +56,11 @@ type
       it registers and returns a named alias 'PX = ^X' — required
       because FPC rejects '^X' as a parameter or return type. }
     function  MapTypeForSig(T: TBindingType): string;
+    function  AliasPointer(const Raw: string): string;
     function  LocComment(const Loc: TSourceLoc): string;
     function  EscapeIdent(const S: string): string;
     procedure CollectFunctionPointerAliases(U: TBindingUnit);
+    procedure WalkTypeForAliases(T: TBindingType);
   public
     constructor Create(const AUnitName, ALibrary: string);
     destructor Destroy; override;
@@ -183,19 +185,57 @@ begin
   else Result := S;  { caller's problem: must be a previously declared type }
 end;
 
-function TFpcEmitter.MapTypeForSig(T: TBindingType): string;
+{ Recursively name an inline pointer type. '^X' becomes 'PX' (with
+  'PX = ^X' registered); '^^X' becomes 'PPX' (with 'PPX = ^PX' and
+  'PX = ^X' both registered). The result is always a single Pascal
+  identifier safe to use as a parameter or return type. }
+function TFpcEmitter.AliasPointer(const Raw: string): string;
 var
-  Raw, Pointee: string;
+  Pointee, InnerAlias: string;
 begin
-  Raw := MapType(T);
   if (Length(Raw) >= 2) and (Raw[1] = '^') then
   begin
     Pointee := Copy(Raw, 2, MaxInt);
-    Result := 'P' + Pointee;
-    FPointerAliases.Add(Pointee);
+    if (Length(Pointee) >= 1) and (Pointee[1] = '^') then
+    begin
+      InnerAlias := AliasPointer(Pointee);
+      Result := 'P' + InnerAlias;
+      FPointerAliases.Add(InnerAlias);
+    end
+    else
+    begin
+      Result := 'P' + Pointee;
+      FPointerAliases.Add(Pointee);
+    end;
   end
   else
     Result := Raw;
+end;
+
+function TFpcEmitter.MapTypeForSig(T: TBindingType): string;
+begin
+  Result := AliasPointer(MapType(T));
+end;
+
+{ Recursively touch every type position to populate FPointerAliases.
+  Mirrors what real emission does, so the aliases can be declared
+  once at the top of the `type` section — FPC will not forward-resolve
+  a 'P<X>' identifier inside a procedural-type body in a typedef RHS,
+  so the aliases must already be in scope when those typedefs are
+  emitted. }
+procedure TFpcEmitter.WalkTypeForAliases(T: TBindingType);
+var
+  J: Integer;
+  Discard: string;
+begin
+  if T = nil then Exit;
+  Discard := AliasPointer(MapType(T));
+  if Discard = '' then ;
+  if T.Pointee <> nil then WalkTypeForAliases(T.Pointee);
+  if T.FuncReturn <> nil then WalkTypeForAliases(T.FuncReturn);
+  if T.FuncParams <> nil then
+    for J := 0 to T.FuncParams.Count - 1 do
+      WalkTypeForAliases(T.FuncParams.Items[J]);
 end;
 
 procedure TFpcEmitter.CollectFunctionPointerAliases(U: TBindingUnit);
@@ -203,24 +243,39 @@ var
   I, J: Integer;
   D: TBindingDecl;
   F: TBindingFunction;
-  Discard: string;
+  R: TBindingRecord;
+  Td: TBindingTypedef;
 begin
   FPointerAliases.Clear;
   for I := 0 to U.Decls.Count - 1 do
   begin
     D := U.Decls.Items[I];
-    if not (D is TBindingFunction) then Continue;
-    F := TBindingFunction(D);
-    Discard := MapTypeForSig(F.ReturnType);
-    for J := 0 to F.Params.Count - 1 do
-      Discard := MapTypeForSig(F.Params.Items[J].ParamType);
+    if D is TBindingFunction then
+    begin
+      F := TBindingFunction(D);
+      WalkTypeForAliases(F.ReturnType);
+      for J := 0 to F.Params.Count - 1 do
+        WalkTypeForAliases(F.Params.Items[J].ParamType);
+    end
+    else if D is TBindingRecord then
+    begin
+      R := TBindingRecord(D);
+      for J := 0 to R.Fields.Count - 1 do
+        WalkTypeForAliases(R.Fields.Items[J].FieldType);
+    end
+    else if D is TBindingTypedef then
+    begin
+      Td := TBindingTypedef(D);
+      WalkTypeForAliases(Td.Aliased);
+    end;
   end;
-  if Discard = '' then ;  { suppress unused-warning }
 end;
 
 function TFpcEmitter.MapType(T: TBindingType): string;
 var
   Inner: string;
+  J: Integer;
+  Params, Ret: string;
 begin
   if T = nil then begin Result := 'Pointer'; Exit; end;
   case T.Kind of
@@ -265,6 +320,24 @@ begin
           Result := MapPrimitive(T.CanonicalSpelling)
         else
           Result := Inner;
+      end;
+    tkFunctionPointer:
+      begin
+        Params := '';
+        if T.FuncParams <> nil then
+          for J := 0 to T.FuncParams.Count - 1 do
+          begin
+            if Params <> '' then Params := Params + '; ';
+            Params := Params + Format('arg%d: %s',
+              [J + 1, MapTypeForSig(T.FuncParams.Items[J])]);
+          end;
+        if Params <> '' then Params := '(' + Params + ')';
+        if T.FuncReturn = nil then Ret := ''
+        else Ret := MapTypeForSig(T.FuncReturn);
+        if Ret = '' then
+          Result := Format('procedure%s; cdecl', [Params])
+        else
+          Result := Format('function%s: %s; cdecl', [Params, Ret]);
       end;
     tkPrimitive:
       Result := MapPrimitive(T.Spelling);
@@ -459,19 +532,22 @@ begin
   if HasTypes or (FPointerAliases.Count > 0) then
   begin
     Line('type');
-    for I := 0 to U.Decls.Count - 1 do
-    begin
-      D := U.Decls.Items[I];
-      if not (D is TBindingFunction) then EmitDecl(D);
-    end;
-    { Synthesized 'P<X> = ^X' aliases for every pointee that appears
-      as a function parameter or return type. FPC rejects inline '^X'
-      in signatures; record fields and typedef RHS keep using '^X'. }
+    { Synthesized 'P<X> = ^X' aliases emitted FIRST so any typedef
+      with an inline procedural-type RHS referencing them resolves.
+      FPC accepts the forward 'X' name in '^X' (single-pointer
+      forward-ref rule) even when 'X' is a record declared further
+      down — but it does NOT forward-resolve 'PX' inside a
+      function-pointer typedef body. }
     if FPointerAliases.Count > 0 then
     begin
       for I := 0 to FPointerAliases.Count - 1 do
         Line(Format('  P%s = ^%s;',
                     [FPointerAliases[I], FPointerAliases[I]]));
+    end;
+    for I := 0 to U.Decls.Count - 1 do
+    begin
+      D := U.Decls.Items[I];
+      if not (D is TBindingFunction) then EmitDecl(D);
     end;
     Line;
   end;

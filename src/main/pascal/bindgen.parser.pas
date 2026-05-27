@@ -53,16 +53,65 @@ end;
 
 { Translate a TClangType into the dialect-neutral TBindingType. The
   input is borrowed; result is heap-allocated and owned by the caller. }
+function BuildType(T: TClangType): TBindingType; forward;
+
+{ Build a tkFunctionPointer from a FunctionProto-kind type. The proto
+  itself supplies the return type and argument types; parameter names
+  are not part of the prototype (libclang exposes them only on
+  ParmDecl children of a FunctionDecl, not on bare function types). }
+function BuildFunctionProto(T: TClangType; const Spelling: string): TBindingType;
+var
+  RT, AT: TClangType;
+  N, I: Integer;
+begin
+  Result := TBindingType.Create(tkFunctionPointer, Spelling);
+  Result.FuncParams := TBindingTypeList.Create;
+  RT := T.ResultType;
+  try
+    Result.FuncReturn := BuildType(RT);
+  finally
+    RT.Free;
+  end;
+  N := T.NumArgs;
+  for I := 0 to N - 1 do
+  begin
+    AT := T.Arg(I);
+    try
+      Result.FuncParams.Add(BuildType(AT));
+    finally
+      AT.Free;
+    end;
+  end;
+end;
+
 function BuildType(T: TClangType): TBindingType;
 var
   K: Integer;
   Spelling: string;
-  Sub: TClangType;
+  Sub, Canon: TClangType;
 begin
   K := T.Kind;
   Spelling := T.Spelling;
   if K = TClangTypeKinds.Pointer_ then
   begin
+    { Pointer-to-function: collapse 'T (*)(args)' into tkFunctionPointer
+      so the emitter can render a Pascal procedural type instead of
+      'function(...)' garbage from the C spelling. }
+    Sub := T.Pointee;
+    try
+      Canon := Sub.Canonical;
+      try
+        if Canon.Kind = TClangTypeKinds.FunctionProto then
+        begin
+          Result := BuildFunctionProto(Canon, Spelling);
+          Exit;
+        end;
+      finally
+        Canon.Free;
+      end;
+    finally
+      Sub.Free;
+    end;
     Result := TBindingType.Create(tkPointer, Spelling);
     Sub := T.Pointee;
     try
@@ -71,6 +120,8 @@ begin
       Sub.Free;
     end;
   end
+  else if K = TClangTypeKinds.FunctionProto then
+    Result := BuildFunctionProto(T, Spelling)
   else if (K = TClangTypeKinds.ConstantArray) or
           (K = TClangTypeKinds.IncompleteArray) then
   begin
@@ -107,18 +158,39 @@ begin
   end
   else if K = TClangTypeKinds.Elaborated then
   begin
-    { "struct Foo" / "enum Bar" / typedef-of-anything form — unwrap
-      to the underlying. Preserve the user-facing spelling for refs
-      (so 'struct Point' stays as the tag 'Point'), but let
-      canonical primitives keep their canonical name so MapPrimitive
-      can map them ('size_t' canonical is 'unsigned long' → culong). }
-    Sub := T.Canonical;
-    try
-      Result := BuildType(Sub);
-      if Result.Kind in [tkRecordRef, tkEnumRef, tkTypedefRef] then
-        Result.Spelling := Spelling;
-    finally
-      Sub.Free;
+    { "struct Foo" / "enum Bar" / typedef-of-anything. If the spelling
+      is a bare identifier (no space, no asterisk) it names a typedef
+      directly — model it as tkTypedefRef and skip canonicalization,
+      which would otherwise unfold a function-pointer typedef into an
+      inline procedural type. Only when the spelling carries a
+      'struct '/'union '/'enum ' tag or other adornment do we need to
+      chase the canonical for the underlying record/enum/primitive. }
+    if (Spelling <> '') and (Pos(' ', Spelling) = 0)
+       and (Pos('*', Spelling) = 0) then
+    begin
+      Result := TBindingType.Create(tkTypedefRef, Spelling);
+      { Capture canonical primitive for the fallback-when-undeclared
+        path — same rule as the bare-Typedef branch above. }
+      Sub := T.Canonical;
+      try
+        if (Sub.Kind <> TClangTypeKinds.Record_)
+           and (Sub.Kind <> TClangTypeKinds.FunctionProto)
+           and (Sub.Kind <> TClangTypeKinds.Pointer_) then
+          Result.CanonicalSpelling := Sub.Spelling;
+      finally
+        Sub.Free;
+      end;
+    end
+    else
+    begin
+      Sub := T.Canonical;
+      try
+        Result := BuildType(Sub);
+        if Result.Kind in [tkRecordRef, tkEnumRef, tkTypedefRef] then
+          Result.Spelling := Spelling;
+      finally
+        Sub.Free;
+      end;
     end;
   end
   else
