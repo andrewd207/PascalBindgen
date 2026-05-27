@@ -199,7 +199,7 @@ begin
   Params := '';
   for I := 0 to F.Params.Count - 1 do
   begin
-    P := F.Params[I];
+    P := F.Params.Items[I];
     if Params <> '' then Params := Params + '; ';
     ParamName := P.Name;
     if ParamName = '' then ParamName := Format('arg%d', [I + 1]);
@@ -239,7 +239,7 @@ begin
     Line('    case Integer of');
     for I := 0 to R.Fields.Count - 1 do
     begin
-      F := R.Fields[I];
+      F := R.Fields.Items[I];
       Line(Format('      %d: (%s: %s);', [I, F.Name, MapType(F.FieldType)]));
     end;
     Line('  end;');
@@ -249,7 +249,7 @@ begin
     Line(Format('  %s = record%s', [R.Name, LocComment(R.Location)]));
     for I := 0 to R.Fields.Count - 1 do
     begin
-      F := R.Fields[I];
+      F := R.Fields.Items[I];
       if F.BitWidth >= 0 then
         Line(Format('    %s: %s;  { bit-field: width=%d, best-effort }',
                     [F.Name, MapType(F.FieldType), F.BitWidth]))
@@ -278,7 +278,7 @@ begin
     Line('const');
     for I := 0 to E.Constants.Count - 1 do
     begin
-      C := E.Constants[I];
+      C := E.Constants.Items[I];
       Line(Format('  %s = %d;', [C.Name, C.Value]));
     end;
     Line('type');
@@ -330,7 +330,7 @@ begin
   HasFuncs := False;
   for I := 0 to U.Decls.Count - 1 do
   begin
-    D := U.Decls[I];
+    D := U.Decls.Items[I];
     if not (D is TBindingFunction) then HasTypes := True
     else HasFuncs := True;
   end;
@@ -340,7 +340,7 @@ begin
     Line('type');
     for I := 0 to U.Decls.Count - 1 do
     begin
-      D := U.Decls[I];
+      D := U.Decls.Items[I];
       if not (D is TBindingFunction) then EmitDecl(D);
     end;
     Line;
@@ -350,7 +350,7 @@ begin
   begin
     for I := 0 to U.Decls.Count - 1 do
     begin
-      D := U.Decls[I];
+      D := U.Decls.Items[I];
       if D is TBindingFunction then EmitDecl(D);
     end;
     Line;

@@ -1,0 +1,102 @@
+= Blaise compatibility notes
+:toc:
+
+Issues hit while porting `pascal_bindgen`'s own source to compile under
+both FPC and the Blaise compiler. Reported with minimal repros to make
+fixes upstream straightforward. Blaise is a young Pascal compiler under
+active development; everything here is expected to improve.
+
+Tested against:
+
+* FPC 3.3.1 (Linux x86_64, 2026-05-12 build)
+* Blaise v0.9.0-dev via `compiler/bootstrap/blaise_unit_source`
+* Date: 2026-05-27
+
+== Compiler driver / link surface
+
+[cols="1,2,2"]
+|===
+| Concern | FPC | Blaise
+
+| Library link via directive    | `{$linklib X}` honored        | Directive silently consumed (`uLexer.pas:472`); no `-l` flag emitted
+| Library link via CLI / env    | `-Fl<dir>`, `-k-l<name>`      | None — `cc` arg list is hardcoded in `Blaise.pas:511-527`
+| Loader-resolved `external 'lib'` | `external 'libfoo'` syntax  | No equivalent; externs are bare `external name 'sym'`
+| Calling conventions in extern | `cdecl`/`stdcall`/...         | None — externs carry only `name '...'`
+| Varargs                        | `varargs;` modifier           | None
+|===
+
+Workaround in this project: `tools/blaise_link.py` runs `blaise
+--emit-ir`, then drives `clang -c` + `cc` manually with the shim
+linked in.
+
+== Parser / syntactic
+
+[cols="1,2,2"]
+|===
+| Concern | FPC | Blaise
+
+| Forward class declaration            | `TFoo = class;`                       | Not supported in any spelling (`class;`, `class forward;`, `class; forward;` all rejected) — see comment in `blaise.testing.pas`
+| `default;` on indexed property       | Supported, enables `someList[I]`      | Rejected (parse error after `default`); call sites must use `someList.Items[I]`
+| `inherited;` bare                    | Resolves by name to parent method     | Requires explicit method name: `inherited Destroy;` / `inherited Create;`
+| `{$mode}` / `{$H+}` directives       | Required for modern features          | Unknown directives are silently consumed; gate FPC-mode-dependent code with `{$IFDEF FPC} ... {$ENDIF}`
+| `{$modeswitch advancedrecords}`      | Required for records-with-methods     | Records with methods accepted natively
+| `var X: T = default` initializer     | Supported                             | Parse error — initialize in `begin` body instead
+| `arr[I].MethodCall`                  | OK                                    | Parse error; assign to a local first: `obj := arr[I]; obj.Method;`
+| `FItems[N] := Item;` (writing to array-of-T class field) | OK | Semantic error "Undeclared variable 'FItems'" — see repro below
+|===
+
+.Minimal repro for the array-field-assignment issue:
+[source,pascal]
+----
+program aw;
+type
+  TFoo = class
+    FItems: array of Integer;
+    procedure Add(X: Integer);
+  end;
+procedure TFoo.Add(X: Integer);
+var N: Integer;
+begin
+  N := Length(FItems);        // OK
+  SetLength(FItems, N + 1);   // OK
+  FItems[N] := X;             // Semantic error: Undeclared variable 'FItems'
+end;
+begin end.
+----
+
+Reading from an array-of-T field works (`Result := FItems[I]`), as does
+passing the field to `Length`/`SetLength`. Only the indexed-write form
+trips the semantic check. Workaround in this project: pending.
+
+== Standard library
+
+[cols="1,2,2"]
+|===
+| Concern | FPC | Blaise
+
+| `ctypes` unit (`cint`, `cint64`, ...) | Available                       | Absent — use built-ins (`Integer`, `Int64`, `Cardinal`, ...)
+| `fgl` (`TFPGObjectList<T>`)            | Available                      | Absent — Blaise has `Generics.Collections.TList<T>` (no `TObjectList<T>` yet)
+| `Classes.TList` (untyped pointer list) | Available                      | Not in `blaise.stdlib.classes.pas`
+| `PAnsiChar`                            | Available                      | Absent — use `PChar` (still UTF-8 byte pointer)
+| `Char` / `AnsiChar` types              | Available                      | No `Char` type — strings are UTF-8; `str[i]` returns `Integer`
+| `fpcunit` / `consoletestrunner`        | Available                      | Replaced by `blaise.testing` + `blaise.testing.runner.text` (same xUnit API surface)
+|===
+
+== Records / layout
+
+Blaise uses natural alignment that matches the C ABI by default — no
+`{$PACKRECORDS C}`-equivalent needed in emitted units. Byte=1, UInt16=2,
+Integer=4, Int64=8.
+
+Variant records (`record case Integer of ...`) are not supported. The
+Blaise emitter represents C unions as a record holding only the first
+alternative + a loss comment.
+
+== Out of scope (for this doc)
+
+Behavioural differences that don't block dual-build:
+
+* String indexing is 0-based in Blaise vs 1-based in FPC (affects
+  per-char code; we avoid both).
+* Long double width (Blaise has no 80-bit float; emitter maps `long
+  double` → `Double`).

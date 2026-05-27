@@ -15,90 +15,137 @@
 unit bindgen.ir;
 
 {$IFDEF FPC}
-{$mode objfpc}{$H+}
+{$mode delphi}{$H+}
 {$ENDIF}
 
 interface
 
 uses
-  Classes, SysUtils;
+  Classes, SysUtils, Generics.Collections;
 
+{ Type declarations are ordered strictly linearly — Blaise has no
+  `TFoo = class;` forward syntax, so every class must be fully
+  declared before any other type references it. }
 type
   TSourceLoc = record
     FileName: string;
     Line, Col: Cardinal;
   end;
 
-  TBindingDecl = class;
-  TBindingType = class;
-  TBindingParam = class;
-  TBindingField = class;
-  TBindingEnumConst = class;
+  { Tag for the type hierarchy. Coarse by design — emitter falls back
+    to the spelling for anything it can't recognize. }
+  TBindingTypeKind = (
+    tkUnknown,
+    tkPrimitive,
+    tkPointer,
+    tkArray,
+    tkRecordRef,
+    tkEnumRef,
+    tkTypedefRef,
+    tkFunctionPointer
+  );
 
-  { Five purpose-built owned-list classes — hand-rolled because
-    Blaise's Generics.Collections lacks TObjectList<T>, and using
-    fgl.TFPGObjectList<...>/specialize bakes in an FPC-only spelling.
-    The repetition stays cheap and the cross-compiler portability wins. }
-
-  TBindingDeclList = class
+  TBindingType = class
   private
-    FList: TList;
-    function GetItem(I: Integer): TBindingDecl;
+    FKind: TBindingTypeKind;
+    FSpelling: string;
+    FPointee: TBindingType;   { self-ref allowed inside own class block }
+    FArraySize: Int64;
   public
-    constructor Create;
+    constructor Create(AKind: TBindingTypeKind; const ASpelling: string);
     destructor Destroy; override;
-    function Count: Integer;
-    procedure Add(Item: TBindingDecl);
-    property Items[I: Integer]: TBindingDecl read GetItem; default;
+    property Kind: TBindingTypeKind read FKind write FKind;
+    property Spelling: string read FSpelling write FSpelling;
+    property Pointee: TBindingType read FPointee write FPointee;
+    property ArraySize: Int64 read FArraySize write FArraySize;
   end;
 
   TBindingTypeList = class
   private
-    FList: TList;
+    FItems: TList<TBindingType>;
     function GetItem(I: Integer): TBindingType;
   public
     constructor Create;
     destructor Destroy; override;
     function Count: Integer;
     procedure Add(Item: TBindingType);
-    property Items[I: Integer]: TBindingType read GetItem; default;
+    property Items[I: Integer]: TBindingType read GetItem;
+  end;
+
+  TBindingParam = class
+  private
+    FName: string;
+    FParamType: TBindingType;
+    FIsConst: Boolean;
+  public
+    constructor Create(const AName: string; AParamType: TBindingType; AIsConst: Boolean);
+    destructor Destroy; override;
+    property Name: string read FName write FName;
+    property ParamType: TBindingType read FParamType;
+    property IsConst: Boolean read FIsConst write FIsConst;
   end;
 
   TBindingParamList = class
   private
-    FList: TList;
+    FItems: TList<TBindingParam>;
     function GetItem(I: Integer): TBindingParam;
   public
     constructor Create;
     destructor Destroy; override;
     function Count: Integer;
     procedure Add(Item: TBindingParam);
-    property Items[I: Integer]: TBindingParam read GetItem; default;
+    property Items[I: Integer]: TBindingParam read GetItem;
+  end;
+
+  TBindingField = class
+  private
+    FName: string;
+    FFieldType: TBindingType;
+    FBitWidth: Integer;
+  public
+    constructor Create(const AName: string; AFieldType: TBindingType);
+    destructor Destroy; override;
+    property Name: string read FName write FName;
+    property FieldType: TBindingType read FFieldType;
+    property BitWidth: Integer read FBitWidth write FBitWidth;
   end;
 
   TBindingFieldList = class
   private
-    FList: TList;
+    FItems: TList<TBindingField>;
     function GetItem(I: Integer): TBindingField;
   public
     constructor Create;
     destructor Destroy; override;
     function Count: Integer;
     procedure Add(Item: TBindingField);
-    property Items[I: Integer]: TBindingField read GetItem; default;
+    property Items[I: Integer]: TBindingField read GetItem;
+  end;
+
+  TBindingEnumConst = class
+  private
+    FName: string;
+    FValue: Int64;
+  public
+    constructor Create(const AName: string; AValue: Int64);
+    property Name: string read FName;
+    property Value: Int64 read FValue;
   end;
 
   TBindingEnumConstList = class
   private
-    FList: TList;
+    FItems: TList<TBindingEnumConst>;
     function GetItem(I: Integer): TBindingEnumConst;
   public
     constructor Create;
     destructor Destroy; override;
     function Count: Integer;
     procedure Add(Item: TBindingEnumConst);
-    property Items[I: Integer]: TBindingEnumConst read GetItem; default;
+    property Items[I: Integer]: TBindingEnumConst read GetItem;
   end;
+
+  TCallingConv = (ccUnknown, ccCdecl, ccStdcall, ccFastcall);
+  TMacroKind   = (mkUnknown, mkInteger, mkString, mkFloat);
 
   { Base for everything emitted. Owns nothing on its own; subclasses may. }
   TBindingDecl = class
@@ -115,55 +162,6 @@ type
     property LossReason: string read FLossReason write FLossReason;
   end;
 
-  { Tag for the type hierarchy. We keep types deliberately coarse for
-    v1 — the parser will set Spelling to clang's pretty-printed C type
-    spelling, and the emitter can either map known primitives or fall
-    back to emitting a comment with the raw spelling. }
-  TBindingTypeKind = (
-    tkUnknown,
-    tkPrimitive,
-    tkPointer,
-    tkArray,
-    tkRecordRef,
-    tkEnumRef,
-    tkTypedefRef,
-    tkFunctionPointer
-  );
-
-  TBindingType = class
-  private
-    FKind: TBindingTypeKind;
-    FSpelling: string;
-    FPointee: TBindingType;
-    FArraySize: Int64;
-  public
-    constructor Create(AKind: TBindingTypeKind; const ASpelling: string);
-    destructor Destroy; override;
-    property Kind: TBindingTypeKind read FKind write FKind;
-    { Clang's pretty-printed type spelling, for emitter fallback and
-      for source-loc / loss-reason comments. }
-    property Spelling: string read FSpelling write FSpelling;
-    { Set when Kind is tkPointer or tkArray; owned. nil otherwise. }
-    property Pointee: TBindingType read FPointee write FPointee;
-    { Set when Kind is tkArray; -1 for unspecified [] arrays. }
-    property ArraySize: Int64 read FArraySize write FArraySize;
-  end;
-
-  TBindingParam = class
-  private
-    FName: string;
-    FParamType: TBindingType;
-    FIsConst: Boolean;
-  public
-    constructor Create(const AName: string; AParamType: TBindingType; AIsConst: Boolean);
-    destructor Destroy; override;
-    property Name: string read FName write FName;
-    property ParamType: TBindingType read FParamType;
-    property IsConst: Boolean read FIsConst write FIsConst;
-  end;
-
-  TCallingConv = (ccUnknown, ccCdecl, ccStdcall, ccFastcall);
-
   TBindingFunction = class(TBindingDecl)
   private
     FReturnType: TBindingType;
@@ -179,20 +177,6 @@ type
     property CallingConv: TCallingConv read FCallingConv write FCallingConv;
   end;
 
-  TBindingField = class
-  private
-    FName: string;
-    FFieldType: TBindingType;
-    FBitWidth: Integer;
-  public
-    constructor Create(const AName: string; AFieldType: TBindingType);
-    destructor Destroy; override;
-    property Name: string read FName write FName;
-    property FieldType: TBindingType read FFieldType;
-    { -1 if this field is not a bit-field. }
-    property BitWidth: Integer read FBitWidth write FBitWidth;
-  end;
-
   { struct / union — distinguished by IsUnion. }
   TBindingRecord = class(TBindingDecl)
   private
@@ -205,16 +189,6 @@ type
     property Fields: TBindingFieldList read FFields;
     property IsUnion: Boolean read FIsUnion;
     property IsForwardDecl: Boolean read FIsForwardDecl write FIsForwardDecl;
-  end;
-
-  TBindingEnumConst = class
-  private
-    FName: string;
-    FValue: Int64;
-  public
-    constructor Create(const AName: string; AValue: Int64);
-    property Name: string read FName;
-    property Value: Int64 read FValue;
   end;
 
   TBindingEnum = class(TBindingDecl)
@@ -237,10 +211,6 @@ type
     property Aliased: TBindingType read FAliased write FAliased;
   end;
 
-  TMacroKind = (mkUnknown, mkInteger, mkString, mkFloat);
-
-  { #define FOO 42  /  #define BAR "x"  /  #define BAZ 3.14
-    Function-like macros are skipped with a LossReason. }
   TBindingMacroConst = class(TBindingDecl)
   private
     FRawValue: string;
@@ -251,7 +221,18 @@ type
     property MacroKind: TMacroKind read FMacroKind write FMacroKind;
   end;
 
-  { Top-level container. One instance per --output file. }
+  TBindingDeclList = class
+  private
+    FItems: TList<TBindingDecl>;
+    function GetItem(I: Integer): TBindingDecl;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    function Count: Integer;
+    procedure Add(Item: TBindingDecl);
+    property Items[I: Integer]: TBindingDecl read GetItem;
+  end;
+
   TBindingUnit = class
   private
     FHeaderPaths: TStringList;
@@ -272,79 +253,159 @@ function MakeLoc(const FileName: string; Line, Col: Cardinal): TSourceLoc;
 
 implementation
 
-{ Owned-list implementations. Each owns its items and frees them on
-  destruction. Five near-identical bodies — fewer than the IFDEF
-  + TList<T> + manual cleanup alternative would have been. }
+(* Owned-list implementations. Storage is Generics.Collections.TList<T>
+   in both compilers — FPC uses delphi mode so no `specialize` keyword
+   is needed; Blaise rejects `specialize` outright. Each list manually
+   frees its items in the destructor since TList<T> doesn't own them.
+   Backed by TList<T> rather than `array of T` because Blaise currently
+   mis-parses indexed-write to an `array of T` class field — see
+   docs/blaise_compat.adoc. *)
+
 
 constructor TBindingDeclList.Create;
-begin inherited Create; FList := TList.Create; end;
-destructor TBindingDeclList.Destroy;
-var I: Integer;
 begin
-  for I := 0 to FList.Count - 1 do TObject(FList[I]).Free;
-  FList.Free;
-  inherited;
+  inherited Create;
+  FItems := TList<TBindingDecl>.Create;
 end;
-function TBindingDeclList.Count: Integer; begin Result := FList.Count; end;
+destructor TBindingDeclList.Destroy;
+var I: Integer; obj: TBindingDecl;
+begin
+  for I := 0 to FItems.Count - 1 do
+  begin
+{$IFDEF FPC}    obj := FItems[I];{$ELSE}    obj := FItems.Get(I);{$ENDIF}
+    obj.Free;
+  end;
+  FItems.Free;
+  inherited Destroy;
+end;
+function TBindingDeclList.Count: Integer;
+begin
+  Result := FItems.Count;
+end;
 function TBindingDeclList.GetItem(I: Integer): TBindingDecl;
-begin Result := TBindingDecl(FList[I]); end;
-procedure TBindingDeclList.Add(Item: TBindingDecl); begin FList.Add(Item); end;
+begin
+{$IFDEF FPC}  Result := FItems[I];{$ELSE}  Result := FItems.Get(I);{$ENDIF}
+end;
+procedure TBindingDeclList.Add(Item: TBindingDecl);
+begin
+  FItems.Add(Item);
+end;
 
 constructor TBindingTypeList.Create;
-begin inherited Create; FList := TList.Create; end;
-destructor TBindingTypeList.Destroy;
-var I: Integer;
 begin
-  for I := 0 to FList.Count - 1 do TObject(FList[I]).Free;
-  FList.Free;
-  inherited;
+  inherited Create;
+  FItems := TList<TBindingType>.Create;
 end;
-function TBindingTypeList.Count: Integer; begin Result := FList.Count; end;
+destructor TBindingTypeList.Destroy;
+var I: Integer; obj: TBindingType;
+begin
+  for I := 0 to FItems.Count - 1 do
+  begin
+{$IFDEF FPC}    obj := FItems[I];{$ELSE}    obj := FItems.Get(I);{$ENDIF}
+    obj.Free;
+  end;
+  FItems.Free;
+  inherited Destroy;
+end;
+function TBindingTypeList.Count: Integer;
+begin
+  Result := FItems.Count;
+end;
 function TBindingTypeList.GetItem(I: Integer): TBindingType;
-begin Result := TBindingType(FList[I]); end;
-procedure TBindingTypeList.Add(Item: TBindingType); begin FList.Add(Item); end;
+begin
+{$IFDEF FPC}  Result := FItems[I];{$ELSE}  Result := FItems.Get(I);{$ENDIF}
+end;
+procedure TBindingTypeList.Add(Item: TBindingType);
+begin
+  FItems.Add(Item);
+end;
 
 constructor TBindingParamList.Create;
-begin inherited Create; FList := TList.Create; end;
-destructor TBindingParamList.Destroy;
-var I: Integer;
 begin
-  for I := 0 to FList.Count - 1 do TObject(FList[I]).Free;
-  FList.Free;
-  inherited;
+  inherited Create;
+  FItems := TList<TBindingParam>.Create;
 end;
-function TBindingParamList.Count: Integer; begin Result := FList.Count; end;
+destructor TBindingParamList.Destroy;
+var I: Integer; obj: TBindingParam;
+begin
+  for I := 0 to FItems.Count - 1 do
+  begin
+{$IFDEF FPC}    obj := FItems[I];{$ELSE}    obj := FItems.Get(I);{$ENDIF}
+    obj.Free;
+  end;
+  FItems.Free;
+  inherited Destroy;
+end;
+function TBindingParamList.Count: Integer;
+begin
+  Result := FItems.Count;
+end;
 function TBindingParamList.GetItem(I: Integer): TBindingParam;
-begin Result := TBindingParam(FList[I]); end;
-procedure TBindingParamList.Add(Item: TBindingParam); begin FList.Add(Item); end;
+begin
+{$IFDEF FPC}  Result := FItems[I];{$ELSE}  Result := FItems.Get(I);{$ENDIF}
+end;
+procedure TBindingParamList.Add(Item: TBindingParam);
+begin
+  FItems.Add(Item);
+end;
 
 constructor TBindingFieldList.Create;
-begin inherited Create; FList := TList.Create; end;
-destructor TBindingFieldList.Destroy;
-var I: Integer;
 begin
-  for I := 0 to FList.Count - 1 do TObject(FList[I]).Free;
-  FList.Free;
-  inherited;
+  inherited Create;
+  FItems := TList<TBindingField>.Create;
 end;
-function TBindingFieldList.Count: Integer; begin Result := FList.Count; end;
+destructor TBindingFieldList.Destroy;
+var I: Integer; obj: TBindingField;
+begin
+  for I := 0 to FItems.Count - 1 do
+  begin
+{$IFDEF FPC}    obj := FItems[I];{$ELSE}    obj := FItems.Get(I);{$ENDIF}
+    obj.Free;
+  end;
+  FItems.Free;
+  inherited Destroy;
+end;
+function TBindingFieldList.Count: Integer;
+begin
+  Result := FItems.Count;
+end;
 function TBindingFieldList.GetItem(I: Integer): TBindingField;
-begin Result := TBindingField(FList[I]); end;
-procedure TBindingFieldList.Add(Item: TBindingField); begin FList.Add(Item); end;
+begin
+{$IFDEF FPC}  Result := FItems[I];{$ELSE}  Result := FItems.Get(I);{$ENDIF}
+end;
+procedure TBindingFieldList.Add(Item: TBindingField);
+begin
+  FItems.Add(Item);
+end;
 
 constructor TBindingEnumConstList.Create;
-begin inherited Create; FList := TList.Create; end;
-destructor TBindingEnumConstList.Destroy;
-var I: Integer;
 begin
-  for I := 0 to FList.Count - 1 do TObject(FList[I]).Free;
-  FList.Free;
-  inherited;
+  inherited Create;
+  FItems := TList<TBindingEnumConst>.Create;
 end;
-function TBindingEnumConstList.Count: Integer; begin Result := FList.Count; end;
+destructor TBindingEnumConstList.Destroy;
+var I: Integer; obj: TBindingEnumConst;
+begin
+  for I := 0 to FItems.Count - 1 do
+  begin
+{$IFDEF FPC}    obj := FItems[I];{$ELSE}    obj := FItems.Get(I);{$ENDIF}
+    obj.Free;
+  end;
+  FItems.Free;
+  inherited Destroy;
+end;
+function TBindingEnumConstList.Count: Integer;
+begin
+  Result := FItems.Count;
+end;
 function TBindingEnumConstList.GetItem(I: Integer): TBindingEnumConst;
-begin Result := TBindingEnumConst(FList[I]); end;
-procedure TBindingEnumConstList.Add(Item: TBindingEnumConst); begin FList.Add(Item); end;
+begin
+{$IFDEF FPC}  Result := FItems[I];{$ELSE}  Result := FItems.Get(I);{$ENDIF}
+end;
+procedure TBindingEnumConstList.Add(Item: TBindingEnumConst);
+begin
+  FItems.Add(Item);
+end;
 
 function MakeLoc(const FileName: string; Line, Col: Cardinal): TSourceLoc;
 begin
@@ -375,7 +436,7 @@ end;
 destructor TBindingType.Destroy;
 begin
   FPointee.Free;
-  inherited;
+  inherited Destroy;
 end;
 
 { TBindingParam }
@@ -391,7 +452,7 @@ end;
 destructor TBindingParam.Destroy;
 begin
   FParamType.Free;
-  inherited;
+  inherited Destroy;
 end;
 
 { TBindingFunction }
@@ -406,7 +467,7 @@ destructor TBindingFunction.Destroy;
 begin
   FReturnType.Free;
   FParams.Free;
-  inherited;
+  inherited Destroy;
 end;
 
 { TBindingField }
@@ -422,7 +483,7 @@ end;
 destructor TBindingField.Destroy;
 begin
   FFieldType.Free;
-  inherited;
+  inherited Destroy;
 end;
 
 { TBindingRecord }
@@ -437,7 +498,7 @@ end;
 destructor TBindingRecord.Destroy;
 begin
   FFields.Free;
-  inherited;
+  inherited Destroy;
 end;
 
 { TBindingEnumConst }
@@ -461,7 +522,7 @@ destructor TBindingEnum.Destroy;
 begin
   FConstants.Free;
   FUnderlyingType.Free;
-  inherited;
+  inherited Destroy;
 end;
 
 { TBindingTypedef }
@@ -474,7 +535,7 @@ end;
 destructor TBindingTypedef.Destroy;
 begin
   FAliased.Free;
-  inherited;
+  inherited Destroy;
 end;
 
 { TBindingMacroConst }
@@ -488,7 +549,7 @@ end;
 
 constructor TBindingUnit.Create;
 begin
-  inherited;
+  inherited Create;
   FHeaderPaths := TStringList.Create;
   FDecls := TBindingDeclList.Create;
 end;
@@ -497,7 +558,7 @@ destructor TBindingUnit.Destroy;
 begin
   FHeaderPaths.Free;
   FDecls.Free;
-  inherited;
+  inherited Destroy;
 end;
 
 procedure TBindingUnit.AddHeader(const Path: string);

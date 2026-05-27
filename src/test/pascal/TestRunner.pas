@@ -165,7 +165,7 @@ begin
     NFunc := 0; NTypedef := 0; NStruct := 0; NUnion := 0; NEnum := 0;
     for I := 0 to U.Decls.Count - 1 do
     begin
-      D := U.Decls[I];
+      D := U.Decls.Items[I];
       if D is TBindingFunction then Inc(NFunc)
       else if D is TBindingTypedef then Inc(NTypedef)
       else if D is TBindingRecord then
@@ -196,7 +196,7 @@ begin
       unit with stddef/stdint guts. }
     for I := 0 to U.Decls.Count - 1 do
     begin
-      D := U.Decls[I];
+      D := U.Decls.Items[I];
       AssertTrue('decl ' + D.Name + ' came from sample.h, not ' + D.Location.FileName,
                  Pos('sample.h', D.Location.FileName) > 0);
     end;
@@ -217,7 +217,7 @@ begin
     PointStruct := nil;
     for I := 0 to U.Decls.Count - 1 do
     begin
-      D := U.Decls[I];
+      D := U.Decls.Items[I];
       if (D is TBindingRecord) and (D.Name = 'Point') then
         PointStruct := TBindingRecord(D);
     end;
@@ -234,9 +234,9 @@ var
   I: Integer;
 begin
   for I := 0 to U.Decls.Count - 1 do
-    if U.Decls[I].Name = N then
+    if U.Decls.Items[I].Name = N then
     begin
-      Result := U.Decls[I];
+      Result := U.Decls.Items[I];
       Exit;
     end;
   Result := nil;
@@ -254,9 +254,9 @@ begin
     AssertNotNull('add has a return type', F.ReturnType);
     AssertEquals('add returns int', 'int', F.ReturnType.Spelling);
     AssertEquals('add takes 2 params', 2, F.Params.Count);
-    AssertEquals('first param named a', 'a', F.Params[0].Name);
-    AssertEquals('second param named b', 'b', F.Params[1].Name);
-    AssertEquals('first param type int', 'int', F.Params[0].ParamType.Spelling);
+    AssertEquals('first param named a', 'a', F.Params.Items[0].Name);
+    AssertEquals('second param named b', 'b', F.Params.Items[1].Name);
+    AssertEquals('first param type int', 'int', F.Params.Items[0].ParamType.Spelling);
     AssertFalse('add is not variadic', F.IsVarArgs);
   finally
     U.Free;
@@ -274,7 +274,7 @@ begin
     F := TBindingFunction(FindByName(U, 'greet'));
     AssertNotNull('greet present', F);
     AssertEquals('one param', 1, F.Params.Count);
-    PT := F.Params[0].ParamType;
+    PT := F.Params.Items[0].ParamType;
     AssertEquals('param is pointer', Ord(tkPointer), Ord(PT.Kind));
     AssertNotNull('pointer has pointee', PT.Pointee);
     AssertTrue('pointee is const-qualified char',
@@ -295,9 +295,9 @@ begin
     AssertNotNull('Point struct present', R);
     AssertFalse('Point is not a union', R.IsUnion);
     AssertEquals('two fields', 2, R.Fields.Count);
-    AssertEquals('first field is x', 'x', R.Fields[0].Name);
-    AssertEquals('second field is y', 'y', R.Fields[1].Name);
-    AssertEquals('x is int', 'int', R.Fields[0].FieldType.Spelling);
+    AssertEquals('first field is x', 'x', R.Fields.Items[0].Name);
+    AssertEquals('second field is y', 'y', R.Fields.Items[1].Name);
+    AssertEquals('x is int', 'int', R.Fields.Items[0].FieldType.Spelling);
   finally
     U.Free;
   end;
@@ -313,10 +313,10 @@ begin
     E := TBindingEnum(FindByName(U, 'Color'));
     AssertNotNull('Color enum present', E);
     AssertEquals('three constants', 3, E.Constants.Count);
-    AssertEquals('RED', 'RED', E.Constants[0].Name);
-    AssertEquals('RED=0', 0, E.Constants[0].Value);
-    AssertEquals('GREEN=1', 1, E.Constants[1].Value);
-    AssertEquals('BLUE=2', 2, E.Constants[2].Value);
+    AssertEquals('RED', 'RED', E.Constants.Items[0].Name);
+    AssertEquals('RED=0', 0, E.Constants.Items[0].Value);
+    AssertEquals('GREEN=1', 1, E.Constants.Items[1].Value);
+    AssertEquals('BLUE=2', 2, E.Constants.Items[2].Value);
   finally
     U.Free;
   end;

@@ -16,7 +16,7 @@ var
 begin
   for I := 0 to U.Decls.Count - 1 do
   begin
-    D := U.Decls[I];
+    D := U.Decls.Items[I];
     if D is TBindingFunction then       Kind := 'function'
     else if D is TBindingTypedef then   Kind := 'typedef'
     else if D is TBindingRecord then
