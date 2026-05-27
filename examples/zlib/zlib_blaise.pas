@@ -64,11 +64,6 @@ type
   gzFile_s = record  { zlib.h:1305 }
   end;
   gzFile = ^gzFile_s;  { zlib.h:1305 }
-  gzFile_s = record  { zlib.h:1837 }
-    have: Cardinal;
-    next: ^Byte;
-    pos: off_t;
-  end;
 
 function zlibVersion: PChar; external name 'zlibVersion';  { zlib.h:220 }
 function deflate(strm: ^z_stream_s; flush: Integer): Integer; external name 'deflate';  { zlib.h:250 }

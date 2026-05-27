@@ -5,7 +5,7 @@ program TestRunner;
 {$ENDIF}
 
 uses
-  Classes, SysUtils,
+  Classes, SysUtils, StrUtils,
   {$IFDEF FPC}
   fpcunit, testregistry, consoletestrunner,
   {$ELSE}
@@ -84,6 +84,7 @@ type
     procedure EnumColorHasThreeConsecutiveConstants;
     procedure TypedefMyIntAliasesInt;
     procedure UserIncludeDeclsAreEmittedSystemHeadersAreNot;
+    procedure ForwardDeclThenDefinitionEmitsOnce;
   end;
 
   TFpcEmitTests = class(TTestCase)
@@ -436,6 +437,54 @@ begin
   finally
     U.Free;
   end;
+end;
+
+procedure TParserTests.ForwardDeclThenDefinitionEmitsOnce;
+{ Regression for the zlib gzFile_s pattern: a forward struct decl
+  ahead of its later completion used to produce two type
+  declarations in the emitter output. With dedup on, the FPC
+  emitter must produce exactly one 'OpaqueThing = record' line. }
+const
+  Candidates: array[0..3] of string = (
+    'sample_dup.h',
+    'src/test/resources/sample_dup.h',
+    '../src/test/resources/sample_dup.h',
+    '../../src/test/resources/sample_dup.h'
+  );
+var
+  Header, EmittedSrc: string;
+  I, Count: Integer;
+  P: Integer;
+  Hdr: string;
+  U: TBindingUnit;
+  E: TFpcEmitter;
+begin
+  Hdr := Candidates[0];
+  for I := Low(Candidates) to High(Candidates) do
+    if FileExists(Candidates[I]) then begin Hdr := Candidates[I]; Break; end;
+
+  U := ParseHeader(Hdr);
+  try
+    E := TFpcEmitter.Create('dup', 'libdup');
+    try
+      EmittedSrc := E.Emit(U);
+    finally
+      E.Free;
+    end;
+  finally
+    U.Free;
+  end;
+
+  Count := 0;
+  P := 1;
+  while True do
+  begin
+    P := PosEx('OpaqueThing = record', EmittedSrc, P);
+    if P = 0 then Break;
+    Inc(Count);
+    Inc(P);
+  end;
+  AssertEquals('exactly one OpaqueThing record declaration', 1, Count);
 end;
 
 { TFpcEmitTests }

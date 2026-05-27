@@ -41,6 +41,7 @@ type
     FUnitName: string;
     FLibrary: string;
     FOutput: TStringList;
+    FEmittedTypes: TStringList;
     procedure Line(const S: string = '');
     procedure EmitProvenance(U: TBindingUnit);
     procedure EmitDecl(D: TBindingDecl);
@@ -64,11 +65,15 @@ begin
   FUnitName := AUnitName;
   FLibrary := ALibrary;
   FOutput := TStringList.Create;
+  FEmittedTypes := TStringList.Create;
+  FEmittedTypes.Sorted := True;
+  FEmittedTypes.Duplicates := dupIgnore;
 end;
 
 destructor TFpcEmitter.Destroy;
 begin
   FOutput.Free;
+  FEmittedTypes.Free;
   inherited Destroy;
 end;
 
@@ -302,9 +307,18 @@ end;
 
 procedure TFpcEmitter.EmitDecl(D: TBindingDecl);
 begin
-  if D is TBindingFunction then EmitFunction(TBindingFunction(D))
-  else if D is TBindingRecord then EmitRecord(TBindingRecord(D))
-  else if D is TBindingEnum then EmitEnum(TBindingEnum(D))
+  if D is TBindingFunction then
+  begin
+    EmitFunction(TBindingFunction(D));
+    Exit;
+  end;
+  { Type decls dedup by name. libclang surfaces forward decls and
+    their later completions as separate cursors with the same
+    spelling (zlib's gzFile_s hits this); emit only once. }
+  if FEmittedTypes.IndexOf(D.Name) >= 0 then Exit;
+  FEmittedTypes.Add(D.Name);
+  if      D is TBindingRecord  then EmitRecord(TBindingRecord(D))
+  else if D is TBindingEnum    then EmitEnum(TBindingEnum(D))
   else if D is TBindingTypedef then EmitTypedef(TBindingTypedef(D));
 end;
 
@@ -315,6 +329,7 @@ var
   HasTypes, HasFuncs: Boolean;
 begin
   FOutput.Clear;
+  FEmittedTypes.Clear;
   EmitProvenance(U);
   Line;
   Line(Format('unit %s;', [FUnitName]));
