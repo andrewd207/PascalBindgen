@@ -27,6 +27,19 @@ begin
   end;
 end;
 
+function ReadAllText(Path: string): string;
+var
+  B: TMemoryBlob;
+begin
+  B := TMemoryBlob.Create;
+  try
+    B.LoadFromFile(Path);
+    Result := B.AsString;
+  finally
+    B.Free;
+  end;
+end;
+
 type
   TIRTests = class(TTestCase)
   published
@@ -508,13 +521,7 @@ begin
     if RC <> 0 then
     begin
       Writeln('--- fpc output ---');
-      with TStringList.Create do
-      try
-        LoadFromFile(OutFile);
-        Writeln(Text);
-      finally
-        Free;
-      end;
+      Writeln(ReadAllText(OutFile));
       Writeln('--- emitted source ---');
       Writeln(S);
     end;
@@ -649,8 +656,7 @@ begin
     if RC <> 0 then
     begin
       Writeln('--- blaise output ---');
-      with TStringList.Create do
-      try LoadFromFile(OutFile); Writeln(Text); finally Free; end;
+      Writeln(ReadAllText(OutFile));
       Writeln('--- emitted source ---');
       Writeln(S);
     end;
