@@ -42,7 +42,14 @@ type
     tkRecordRef,
     tkEnumRef,
     tkTypedefRef,
-    tkFunctionPointer
+    tkFunctionPointer,
+    { Marker for C `va_list` / `__builtin_va_list` parameters. The
+      emitter renders these as a unit-local `va_list` typedef whose
+      layout is target-specific (24-byte struct on x86_64 SysV,
+      `Pointer` elsewhere) — that's enough for callers who already
+      hold a va_list to pass it through, and avoids dropping
+      otherwise-useful APIs (gzvprintf, sqlite3_vmprintf, ...). }
+    tkVaList
   );
 
   TBindingTypeList = class;  { forward — TBindingType references it below }

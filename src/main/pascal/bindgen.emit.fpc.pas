@@ -45,6 +45,7 @@ type
     FDeclaredTypeNames: TStringList;
     FPointerAliases: TStringList;
     FOpaqueTypedefs: TStringList;
+    FNeedsVaList: Boolean;
     procedure Line(const S: string = '');
     procedure EmitProvenance(U: TBindingUnit);
     procedure EmitDecl(D: TBindingDecl);
@@ -299,6 +300,7 @@ begin
        and (Pos(' ', RefName) = 0)
        and (Pos('*', RefName) = 0)
        and (Pos('__va_list_tag', RefName) = 0)
+       and (RefName <> 'va_list')
        and (Copy(RefName, 1, 2) <> '__') then
       FOpaqueTypedefs.Add(RefName);
   end;
@@ -323,6 +325,7 @@ var
   Td: TBindingTypedef;
 begin
   DoClear;
+  FNeedsVaList := False;
   for I := 0 to U.Decls.Count - 1 do
   begin
     D := U.Decls.Items[I];
@@ -359,6 +362,7 @@ begin
   if (Pos('(unnamed ', T.Spelling) > 0)
      or (Pos('(anonymous ', T.Spelling) > 0)
      or (Pos('__va_list_tag', T.Spelling) > 0)
+     or (Pos('__builtin_va_list', T.Spelling) > 0)
      or (Pos('__attribute__', T.Spelling) > 0) then
   begin
     Result := 'Pointer';
@@ -447,6 +451,11 @@ begin
           Result := Format('procedure%s; cdecl', [Params])
         else
           Result := Format('function%s: %s; cdecl', [Params, Ret]);
+      end;
+    tkVaList:
+      begin
+        FNeedsVaList := True;
+        Result := 'va_list';
       end;
     tkPrimitive:
       Result := MapPrimitive(T.Spelling);
@@ -653,9 +662,35 @@ begin
     else if not (D is TBindingMacroConst) then HasTypes := True;
   end;
 
-  if HasTypes or (FPointerAliases.Count > 0) or (FOpaqueTypedefs.Count > 0) then
+  if HasTypes or (FPointerAliases.Count > 0) or (FOpaqueTypedefs.Count > 0)
+     or FNeedsVaList then
   begin
     Line('type');
+    { Platform-aware va_list. On SysV x86_64 it's a 24-byte struct
+      passed by address (the `[1]` array-decay form). On Win64 / 32-bit
+      / non-x86 it's effectively a `char*`. The intent here is twofold:
+      (1) callers who already hold a va_list (e.g. a C-side variadic
+      thunk handed one to us) can pass it through; (2) for level-2
+      construction in Pascal, callers can take @localVaList and the
+      record layout is right under SysV. See examples/helpers/. }
+    if FNeedsVaList then
+    begin
+      { Reserve the name so a source-side `typedef ... va_list;`
+        (glib, mingw windows.h, ...) is dropped as a duplicate. }
+      FEmittedTypes.Add('va_list');
+      FEmittedTypes.Add('__va_list_tag');
+      Line('{$IFDEF CPUX86_64}{$IFDEF UNIX}');
+      Line('  __va_list_tag = record');
+      Line('    gp_offset, fp_offset: cuint;');
+      Line('    overflow_arg_area, reg_save_area: Pointer;');
+      Line('  end;');
+      Line('  va_list = array[0..0] of __va_list_tag;');
+      Line('{$ELSE}');
+      Line('  va_list = PAnsiChar;  { Win64 — va_list is char* }');
+      Line('{$ENDIF}{$ELSE}');
+      Line('  va_list = PAnsiChar;  { 32-bit / non-x86 — va_list is char* }');
+      Line('{$ENDIF}');
+    end;
     { Opaque stubs for typedef-ref names that reference system-header
       types we never declared. Layout will not match C — this is a
       v1 "compile, don't crash" measure. }
@@ -690,7 +725,9 @@ begin
            or (LowerCase(FPointerAliases[I]) = 'pansichar')
            or (LowerCase(FPointerAliases[I]) = 'pchar')
            or (LowerCase(FPointerAliases[I]) = 'pwidechar')
-           or (LowerCase(FPointerAliases[I]) = 'pbyte') then Continue;
+           or (LowerCase(FPointerAliases[I]) = 'pbyte')
+           or (LowerCase(FPointerAliases[I]) = 'va_list')
+           or (LowerCase(FPointerAliases[I]) = '__va_list_tag') then Continue;
         if (Length(FPointerAliases[I]) >= 2)
            and (FPointerAliases[I][1] = 'P')
            and (FPointerAliases.IndexOf(Copy(FPointerAliases[I], 2, MaxInt)) >= 0)
@@ -715,6 +752,11 @@ begin
            or (Pos(' ', FPointerAliases[I]) > 0)
            or (Pos('*', FPointerAliases[I]) > 0)
            or (Pos('__va_list_tag', FPointerAliases[I]) > 0) then Continue;
+        { Windows headers ship a hand-written 'PULONG = ^ULONG;' family;
+          skip our auto-alias when the same name is already declared
+          by the source. Pascal is case-insensitive. }
+        if FDeclaredTypeNames.IndexOf('P' + FPointerAliases[I]) >= 0 then
+          Continue;
         Line(Format('  P%s = ^%s;',
                     [FPointerAliases[I], EscapeIdent(FPointerAliases[I])]));
       end;

@@ -18,7 +18,7 @@ program demo;
 {$mode objfpc}{$H+}
 
 uses
-  ctypes, SysUtils, vulkan_fpc;
+  ctypes, SysUtils, vulkan_fpc, bindgen_helpers;
 
 const
   VK_MAX_PHYSICAL_DEVICE_NAME_SIZE = 256;
@@ -66,19 +66,7 @@ begin
   end;
 end;
 
-{ Convert the inline 256-char array field to a Pascal string. The
-  C convention is NUL-terminated, so stop at the first zero byte. }
-function NameToString(const arr: array of cchar): string;
-var
-  i: Integer;
-begin
-  Result := '';
-  for i := Low(arr) to High(arr) do
-  begin
-    if arr[i] = 0 then Break;
-    Result := Result + Chr(Byte(arr[i]));
-  end;
-end;
+{ Char-array → string via bindgen_helpers, so the demo stays short. }
 
 procedure Die(const where: string; rc: VkResult);
 begin
@@ -135,7 +123,7 @@ begin
     Writeln(Format('  [%d] %s — %s — Vulkan %d.%d.%d — %s',
       [i,
        VendorName(props.vendorID),
-       NameToString(props.deviceName),
+       CharArrayToString(props.deviceName, Length(props.deviceName)),
        VersionMajor(props.apiVersion),
        VersionMinor(props.apiVersion),
        VersionPatch(props.apiVersion),

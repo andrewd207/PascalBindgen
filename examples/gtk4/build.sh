@@ -10,7 +10,7 @@ set -eu
 
 LIBDIR=/usr/lib/x86_64-linux-gnu
 
-fpc -Mobjfpc -O1 -k"-rpath=$LIBDIR" \
+fpc -Mobjfpc -O1 -Fu../helpers -k"-rpath=$LIBDIR" \
     -k"$LIBDIR/libgtk-4.so.1" \
     -k"$LIBDIR/libgio-2.0.so.0" \
     -k"$LIBDIR/libgobject-2.0.so.0" \

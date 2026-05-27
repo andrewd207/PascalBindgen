@@ -92,6 +92,17 @@ var
 begin
   K := T.Kind;
   Spelling := T.Spelling;
+  { Detect va_list early — it survives in many shapes (typedef of an
+    array of __va_list_tag, builtin opaque, ...). Collapse them all
+    to a single tkVaList marker so the emitter can route through a
+    platform-aware typedef. }
+  if (Pos('__va_list_tag', Spelling) > 0)
+     or (Pos('__builtin_va_list', Spelling) > 0)
+     or (Spelling = 'va_list') then
+  begin
+    Result := TBindingType.Create(tkVaList, 'va_list');
+    Exit;
+  end;
   if K = TClangTypeKinds.Pointer_ then
   begin
     { Pointer-to-function: collapse 'T (*)(args)' into tkFunctionPointer
@@ -202,7 +213,9 @@ var
   Spell: string;
 begin
   Spell := T.Spelling;
-  Result := (Pos('__va_list_tag', Spell) > 0) or (Pos('va_list', Spell) > 0);
+  Result := (Pos('__va_list_tag', Spell) > 0)
+            or (Pos('__builtin_va_list', Spell) > 0)
+            or (Pos('va_list', Spell) > 0);
 end;
 
 function BuildFunction(C: TClangCursor): TBindingFunction;
@@ -219,10 +232,11 @@ begin
   AttachComment(Result, C);
   FT := C.TypeOf;
   try
-    { Reject va_list-typed signatures — Pascal has no portable
-      equivalent and the canonical 'struct __va_list_tag[1]' spelling
-      would otherwise leak through. The non-va counterpart almost
-      always exists and is reachable via varargs. }
+    { va_list-bearing signatures used to be dropped wholesale. Now
+      we keep them — BuildType collapses any va_list spelling to a
+      single tkVaList marker, and the emitter renders it via a
+      unit-local platform-aware typedef. The flag below is kept for
+      LossReason annotation only. }
     HasVaList := False;
     NA := FT.NumArgs;
     for I := 0 to NA - 1 do
@@ -236,11 +250,10 @@ begin
       if HasVaList then Break;
     end;
     if HasVaList then
-    begin
-      Result.Free;
-      Result := nil;
-      Exit;
-    end;
+      Result.LossReason :=
+        'takes a va_list — caller must pass an already-held va_list; '
+        + 'construction in Pascal needs target-aware helpers (see '
+        + 'bindgen_helpers.pas)';
     RT := FT.ResultType;
     try
       Result.ReturnType := BuildType(RT);

@@ -13,6 +13,17 @@ uses
   ctypes;
 
 type
+{$IFDEF CPUX86_64}{$IFDEF UNIX}
+  __va_list_tag = record
+    gp_offset, fp_offset: cuint;
+    overflow_arg_area, reg_save_area: Pointer;
+  end;
+  va_list = array[0..0] of __va_list_tag;
+{$ELSE}
+  va_list = PAnsiChar;  { Win64 — va_list is char* }
+{$ENDIF}{$ELSE}
+  va_list = PAnsiChar;  { 32-bit / non-x86 — va_list is char* }
+{$ENDIF}
   PBytef = ^Bytef;
   Pcint = ^cint;
   Pcuchar = ^cuchar;
@@ -195,6 +206,7 @@ function inflateValidate(arg1: z_streamp; arg2: cint): cint; cdecl; external 'li
 function inflateCodesUsed(arg1: z_streamp): culong; cdecl; external 'libz' name 'inflateCodesUsed';  { zlib.h:1919 }
 function inflateResetKeep(arg1: z_streamp): cint; cdecl; external 'libz' name 'inflateResetKeep';  { zlib.h:1920 }
 function deflateResetKeep(arg1: z_streamp): cint; cdecl; external 'libz' name 'deflateResetKeep';  { zlib.h:1921 }
+function gzvprintf(file_: gzFile; format: PAnsiChar; va: va_list): cint; cdecl; external 'libz' name 'gzvprintf';  { zlib.h:1928 }
 
 implementation
 

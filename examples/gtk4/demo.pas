@@ -11,7 +11,7 @@ program demo;
 {$mode objfpc}{$H+}
 
 uses
-  ctypes, SysUtils, Math, gtk4_fpc;
+  ctypes, SysUtils, gtk4_fpc, bindgen_helpers;
 
 var
   g_app: PGtkApplication;
@@ -84,11 +84,7 @@ end;
 var
   status: cint;
 begin
-  { GTK/Cairo do legitimate IEEE-754 math (1.0/0.0 → inf, NaN
-    compares, ...) that triggers FPC's default-unmasked FPU
-    exceptions. Mask them all so the main loop survives. }
-  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide,
-                    exOverflow, exUnderflow, exPrecision]);
+  MaskCFpuExceptions;  { from bindgen_helpers }
   g_app := gtk_application_new('org.example.bindgen.demo',
                                G_APPLICATION_DEFAULT_FLAGS);
   g_signal_connect_data(g_app, 'activate',
