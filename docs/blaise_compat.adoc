@@ -48,6 +48,8 @@ linked in.
 | `array of const` (e.g. `Format('%d', [x])`, `Exception.CreateFmt`) | Supported via `TVarRec` | Not yet — `Semantic error: Array literal element N has type 'string'; expected 'Integer'`. Workaround: concat with `IntToStr`/`FloatToStr`.
 | `@OutOrVarParam` (taking address of a `var`/`out` parameter) | OK | `Code generation error: Unsupported L-value form for var argument`. Workaround: stage through a local, then assign back.
 | `@dynArr[0]` (address of dyn-array element)               | OK | Same codegen error. Workaround: `Pointer(arr)` gives the base pointer.
+| `P[i]` indexing of typed pointer (`PByte = ^Byte`)        | OK in mode delphi | `Semantic error: 'P' is not a static array or dynamic array`. The `type PByte = ^Byte` declaration itself parses; only `[]` indexing on it fails. Workaround: pointer arithmetic via `PtrUInt`, then deref or `memcpy`.
+| Constant-expression array bounds (e.g. `array[0..CHUNK-1]`) | OK     | `Parse error: Expected integer bound`. Workaround: literal bound.
 |===
 
 .Minimal repro for the array-field-assignment issue:
@@ -85,6 +87,10 @@ trips the semantic check. Workaround in this project: pending.
 | `PAnsiChar`                            | Available                      | Absent — use `PChar` (still UTF-8 byte pointer)
 | `Char` / `AnsiChar` types              | Available                      | No `Char` type — strings are UTF-8; `str[i]` returns `Integer`
 | `fpcunit` / `consoletestrunner`        | Available                      | Replaced by `blaise.testing` + `blaise.testing.runner.text` (same xUnit API surface)
+| `Move` (RTL bulk memcopy)              | Available                      | Absent — bind `memcpy` directly via `procedure _Memcpy(Dst, Src: Pointer; N: Int64); external name 'memcpy';`
+| `ReallocMem(P, N)`                     | Procedure, mutates `P` via var | Function returning the new pointer — `P := ReallocMem(P, N);` (gated by `{$IFDEF FPC}`)
+| `File` (untyped file) + `AssignFile` / `BlockWrite` / `BlockRead` | Available | Absent — use `streams.TFileInputStream` / `TFileOutputStream`
+| `PByte` (RTL pointer alias)            | Available                      | Absent — `type PByte = ^Byte;` declares fine, but see indexing row above
 |===
 
 == Records / layout
