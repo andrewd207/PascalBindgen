@@ -57,7 +57,7 @@ type
     procedure EmitMacro(M: TBindingMacroConst);
     function  MapType(T: TBindingType): string;
     function  MapTypeForSig(T: TBindingType): string;
-    function  MapPrimitive(const Spelling: string): string;
+    function  MapPrimitive(const Spelling: string; SizeBytes: Int64 = 0): string;
     function  AliasPointer(const Raw: string): string;
     function  LocComment(const Loc: TSourceLoc): string;
     function  EscapeIdent(const S: string): string;
@@ -260,7 +260,7 @@ end;
 
 { C primitive → Blaise built-in type. Width choices target the Blaise
   Linux x86_64 platform (where `long` is 64-bit). }
-function TBlaiseEmitter.MapPrimitive(const Spelling: string): string;
+function TBlaiseEmitter.MapPrimitive(const Spelling: string; SizeBytes: Int64): string;
 var
   S: string;
 begin
@@ -289,8 +289,16 @@ begin
   else if S = 'int'                   then Result := 'Integer'
   else if S = 'unsigned int'          then Result := 'Cardinal'
   else if S = 'unsigned'              then Result := 'Cardinal'
-  else if S = 'long'                  then Result := 'Int64'
-  else if S = 'unsigned long'         then Result := 'UInt64'
+  else if S = 'long'                  then
+  begin
+    { LLP64 (Win64) = 4 bytes; LP64 (Linux/macOS) = 8 bytes. SizeBytes
+      reflects the active clang target — defaults to LP64 for host. }
+    if SizeBytes = 4 then Result := 'Integer' else Result := 'Int64';
+  end
+  else if S = 'unsigned long'         then
+  begin
+    if SizeBytes = 4 then Result := 'Cardinal' else Result := 'UInt64';
+  end
   else if S = 'long long'             then Result := 'Int64'
   else if S = 'unsigned long long'    then Result := 'UInt64'
   else if S = 'float'                 then Result := 'Single'
@@ -483,7 +491,7 @@ begin
           if Copy(T.CanonicalSpelling, 1, 5) = 'enum ' then
             Result := 'Cardinal'   { C enum default width, Blaise spelling }
           else
-            Result := MapPrimitive(T.CanonicalSpelling);
+            Result := MapPrimitive(T.CanonicalSpelling, T.ByteSize);
         end
         else if (T.Kind = tkEnumRef)
                 and (FDeclaredTypeNames.IndexOf(Inner) < 0) then
@@ -523,9 +531,9 @@ begin
         Result := 'va_list';
       end;
     tkPrimitive:
-      Result := MapPrimitive(T.Spelling);
+      Result := MapPrimitive(T.Spelling, T.ByteSize);
   else
-    Result := MapPrimitive(T.Spelling);
+    Result := MapPrimitive(T.Spelling, T.ByteSize);
   end;
 end;
 

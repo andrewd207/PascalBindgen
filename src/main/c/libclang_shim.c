@@ -308,6 +308,14 @@ long long pbg_type_array_size(PbgType* p) {
     return (long long)clang_getArraySize(p->t);
 }
 
+/* Returns the size in bytes for a complete type; -1 / -2 / ... for the
+ * negative CXTypeLayoutError codes (incomplete, dependent, etc.). The
+ * Pascal-side emitter uses this to disambiguate `[un]signed long`,
+ * which is 4 bytes on Win64 (LLP64) but 8 bytes on Linux LP64. */
+long long pbg_type_size_of(PbgType* p) {
+    return (long long)clang_Type_getSizeOf(p->t);
+}
+
 PbgType* pbg_type_result(PbgType* p) {
     return wrap_type(clang_getResultType(p->t));
 }

@@ -60,6 +60,8 @@ type
     FSpelling: string;
     FPointee: TBindingType;   { self-ref allowed inside own class block }
     FArraySize: Int64;
+    FByteSize: Int64;   { for tkPrimitive: bytes from clang_Type_getSizeOf;
+                          negative = layout error; 0 = unset }
     FCanonicalSpelling: string;  { for tkTypedefRef: canonical C name }
     FFuncReturn: TBindingType;   { for tkFunctionPointer: return type }
     FFuncParams: TBindingTypeList; { for tkFunctionPointer: parameter types }
@@ -70,6 +72,7 @@ type
     property Spelling: string read FSpelling write FSpelling;
     property Pointee: TBindingType read FPointee write FPointee;
     property ArraySize: Int64 read FArraySize write FArraySize;
+    property ByteSize: Int64 read FByteSize write FByteSize;
     { Populated for tkFunctionPointer. Owned by this TBindingType. }
     property FuncReturn: TBindingType read FFuncReturn write FFuncReturn;
     property FuncParams: TBindingTypeList read FFuncParams write FFuncParams;

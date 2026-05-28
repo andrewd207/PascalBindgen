@@ -13,6 +13,7 @@
 
     <compilerOptions>
       <option>-Flsrc/main/c</option>
+      <option>-k--allow-shlib-undefined</option>
       <option>-k-lclang_shim</option>
       <option>-k-rpath=\$ORIGIN/../src/main/c</option>
       <option>-k--dynamic-linker=/lib64/ld-linux-x86-64.so.2</option>

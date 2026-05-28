@@ -208,7 +208,10 @@ begin
     end;
   end
   else
+  begin
     Result := TBindingType.Create(tkPrimitive, Spelling);
+    Result.ByteSize := T.SizeOf;
+  end;
 end;
 
 function ContainsVaList(T: TClangType): Boolean;

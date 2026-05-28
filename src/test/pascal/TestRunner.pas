@@ -120,6 +120,9 @@ type
     procedure StructPointHasIntegerFields;
     procedure EnumColorEmitsTypeAndConstants;
     procedure EmittedSourceCompilesUnderBlaise;
+    procedure UnsignedLongMapsBySizeOnWin64;
+    procedure UnsignedLongMapsBySizeOnLinux;
+    procedure DisambiguatesAgainstRtlGlobalCollision;
   end;
 
   TClangTypeTests = class(TTestCase)
@@ -1119,6 +1122,88 @@ begin
     DeleteFile(PasFile);
     DeleteFile(OutFile);
   end;
+end;
+
+{ Emit a fixture header under a specific clang -target, returning
+  the Blaise-dialect unit text. Helper for the size-aware tests. }
+function EmitBlaiseForTarget(const Hdr, Target: string): string;
+var
+  TmpDir, HdrFile: string;
+  U: TBindingUnit;
+  E: TBlaiseEmitter;
+begin
+  TmpDir := GetTempDir;
+  HdrFile := IncludeTrailingPathDelimiter(TmpDir) + 'sizeprobe.h';
+  WriteSnippet(HdrFile, Hdr);
+  try
+    U := ParseHeader(HdrFile, ['-target', Target]);
+    try
+      E := TBlaiseEmitter.Create('sizeprobe', 'libsizeprobe');
+      try
+        Result := E.Emit(U);
+      finally
+        E.Free;
+      end;
+    finally
+      U.Free;
+    end;
+  finally
+    DeleteFile(HdrFile);
+  end;
+end;
+
+procedure TBlaiseEmitTests.UnsignedLongMapsBySizeOnWin64;
+const
+  Hdr =
+    'typedef unsigned long DWORD;'    + LineEnding +
+    'typedef long          LONG;'     + LineEnding;
+var
+  S: string;
+begin
+  { LLP64: unsigned long = 4 bytes -> Cardinal; long = 4 bytes -> Integer. }
+  S := EmitBlaiseForTarget(Hdr, 'x86_64-w64-mingw32');
+  AssertTrue('DWORD on Win64 should be Cardinal: ' + S,
+             Pos('DWORD = Cardinal', S) > 0);
+  AssertTrue('LONG on Win64 should be Integer: ' + S,
+             Pos('LONG = Integer', S) > 0);
+end;
+
+procedure TBlaiseEmitTests.UnsignedLongMapsBySizeOnLinux;
+const
+  Hdr =
+    'typedef unsigned long DWORD;'    + LineEnding +
+    'typedef long          LONG;'     + LineEnding;
+var
+  S: string;
+begin
+  { LP64: unsigned long = 8 bytes -> UInt64; long = 8 bytes -> Int64. }
+  S := EmitBlaiseForTarget(Hdr, 'x86_64-linux-gnu');
+  AssertTrue('DWORD on Linux should be UInt64: ' + S,
+             Pos('DWORD = UInt64', S) > 0);
+  AssertTrue('LONG on Linux should be Int64: ' + S,
+             Pos('LONG = Int64', S) > 0);
+end;
+
+procedure TBlaiseEmitTests.DisambiguatesAgainstRtlGlobalCollision;
+const
+  { WriteFile and Sleep are both names of Blaise RTL globals; the
+    emitter must rename the Pascal-side identifier while keeping the
+    original C name in the external clause. }
+  Hdr =
+    'int WriteFile(int);' + LineEnding +
+    'void Sleep(int);'    + LineEnding;
+var
+  S: string;
+begin
+  S := EmitBlaiseForTarget(Hdr, 'x86_64-w64-mingw32');
+  AssertTrue('WriteFile renamed to WriteFile_: ' + S,
+             Pos('function WriteFile_(', S) > 0);
+  AssertTrue('WriteFile external keeps original C name: ' + S,
+             Pos('external name ''WriteFile''', S) > 0);
+  AssertTrue('Sleep renamed to Sleep_: ' + S,
+             Pos('procedure Sleep_(', S) > 0);
+  AssertTrue('Sleep external keeps original C name: ' + S,
+             Pos('external name ''Sleep''', S) > 0);
 end;
 
 { TClangTypeTests }

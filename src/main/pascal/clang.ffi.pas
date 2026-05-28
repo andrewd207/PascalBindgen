@@ -76,6 +76,7 @@ function pbg_type_pointee(p: PPbgType): PPbgType; {$IFDEF FPC}cdecl; {$ENDIF}ext
 function pbg_type_canonical(p: PPbgType): PPbgType; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_type_canonical';
 function pbg_type_array_element(p: PPbgType): PPbgType; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_type_array_element';
 function pbg_type_array_size(p: PPbgType): cint64; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_type_array_size';
+function pbg_type_size_of(p: PPbgType): cint64; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_type_size_of';
 function pbg_type_result(p: PPbgType): PPbgType; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_type_result';
 function pbg_type_num_args(p: PPbgType): cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_type_num_args';
 function pbg_type_arg(p: PPbgType; i: cint): PPbgType; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_type_arg';

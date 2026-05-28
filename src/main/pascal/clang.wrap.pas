@@ -40,6 +40,7 @@ type
     function Canonical: TClangType;
     function ArrayElement: TClangType;
     function ArraySize: Int64;          { -1 if not a constant-size array }
+    function SizeOf: Int64;             { bytes; negative = CXTypeLayoutError }
     function ResultType: TClangType;    { for function-proto types }
     function NumArgs: Integer;          { -1 if not a function }
     function Arg(I: Integer): TClangType;
@@ -424,6 +425,11 @@ end;
 function TClangType.ArraySize: Int64;
 begin
   Result := pbg_type_array_size(FHandle);
+end;
+
+function TClangType.SizeOf: Int64;
+begin
+  Result := pbg_type_size_of(FHandle);
 end;
 
 function TClangType.ResultType: TClangType;
