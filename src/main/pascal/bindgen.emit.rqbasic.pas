@@ -10,9 +10,16 @@
      (param AS T, ...) AS RT`; SUBs are the void-return form.
   4. Records are `TYPE Name ... END TYPE`; fields are `name AS T`.
      No nested records-in-record beyond a named TYPE reference.
-  5. No pointer-to-type spelling — every C pointer collapses to
-     POINTER. char* maps to POINTER too (the runtime cast is
-     `PCHAR(...)` at call sites, not a type).
+  5. Typed pointer aliases use the rqbasic single-line form
+     `TYPE PFoo AS Foo Ptr` (no END TYPE). Aliases are collected
+     during a prepass and emitted up front; rqbasic treats an
+     undeclared pointee as a forward declaration, so ordering
+     doesn't matter. `void*` and `char*` stay as bare POINTER —
+     callers cast char strings via `PCHAR(...)` at the use site.
+     Function-pointer params also collapse to POINTER (no typed
+     procedural form in rqbasic yet). All P-aliases are
+     assignment-compatible with POINTER, mirroring how GObject
+     polymorphism works at the C ABI level.
   6. Constants emit one per line as `CONST NAME = VALUE` — no
      grouped CONST block in this dialect.
   7. Reserved-word collisions resolve to a `_` suffix.
@@ -38,6 +45,17 @@ type
     FOutput: TStringList;
     FEmittedTypes: TStringList;
     FDeclaredTypeNames: TStringList;
+    { name=replacement — when a field/param type references a name
+      that we never emit as a TYPE (typedef aliases, enum typedefs),
+      MapType substitutes the recorded replacement. }
+    FTypedefAliases: TStringList;
+    { Set of pointee names that need a `TYPE P<X> AS X Ptr` alias
+      emitted up front. Populated as a side effect of MapType /
+      AliasPointer during the prepass and main emit pass. }
+    FPointerAliases: TStringList;
+    function  AliasPointer(const Pointee: string): string;
+    procedure WalkTypeForAliases(T: TBindingType);
+    procedure CollectPointerAliases(U: TBindingUnit);
     procedure Line(const S: string = '');
     procedure EmitProvenance(U: TBindingUnit);
     procedure EmitDecl(D: TBindingDecl);
@@ -64,17 +82,19 @@ implementation
 { Loose superset of rqbasic reserved tokens — collisions just get a
   '_' suffix, so over-listing is harmless. }
 const
-  RQBASIC_RESERVED: array[0..65] of string = (
-    'and','or','xor','not','mod','shl','shr',
-    'if','then','else','elseif','end','endif',
-    'while','wend','do','loop','until','for','next','to','step',
-    'select','case','default',
-    'sub','function','declare','dim','redim','as','byval','byref',
-    'type','const','enum','class','extends','property','set','get',
-    'lib','alias','call','return','exit','goto','gosub',
-    'true','false','null','nil','this','self',
+  RQBASIC_RESERVED: array[0..92] of string = (
+    'alias','and','as','base','bind','byref','byval','call','case',
+    'class','color','const','constructor','create','declare','define',
+    'delete','dim','do','else','elseif','end','endif','eof','eol','eqv',
+    'erase','event','exit','extends','for','function','functioni','get',
+    'gosub','goto','if','ifdef','ifndef','imp','include','input','lib',
+    'locate','loop','me','mod','new','next','not','or','preserve',
+    'print','private','property','protected','public','redim','return',
+    'select','set','shl','shr','step','sub','subi','super','swap','then',
+    'this','to','type','undef','until','wend','while','with','xor',
+    { Type names — not strictly keywords but reserve to avoid shadowing }
     'byte','word','short','integer','dword','long','int64','uint64',
-    'single','double','string','pointer'
+    'single','double','string','pointer','ptrint','bool','boolean'
   );
 
 constructor TRqBasicEmitter.Create(const AUnitName, ALibrary: string);
@@ -89,6 +109,12 @@ begin
   FDeclaredTypeNames := TStringList.Create;
   FDeclaredTypeNames.Sorted := True;
   FDeclaredTypeNames.Duplicates := dupIgnore;
+  FTypedefAliases := TStringList.Create;
+  FTypedefAliases.Sorted := True;
+  FTypedefAliases.Duplicates := dupIgnore;
+  FPointerAliases := TStringList.Create;
+  FPointerAliases.Sorted := True;
+  FPointerAliases.Duplicates := dupIgnore;
 end;
 
 destructor TRqBasicEmitter.Destroy;
@@ -96,6 +122,8 @@ begin
   FOutput.Free;
   FEmittedTypes.Free;
   FDeclaredTypeNames.Free;
+  FTypedefAliases.Free;
+  FPointerAliases.Free;
   inherited Destroy;
 end;
 
@@ -204,10 +232,91 @@ begin
   else Result := S;
 end;
 
-{ rqbasic has no pointer-to-type spelling, only a single POINTER
-  type. We map all C pointer/function-pointer/array-decay variants
-  to POINTER, with char* surfaced the same way (callers cast at the
-  use site with PCHAR(...)). }
+{ Given a mapped pointee name, register a `TYPE P<X> AS X Ptr` alias
+  and return its Pascal-side name. Primitives, POINTER, PCHAR, and
+  empty (void) collapse to bare POINTER — those aren't aliasable. }
+function TRqBasicEmitter.AliasPointer(const Pointee: string): string;
+var
+  L: string;
+begin
+  if Pointee = '' then begin Result := 'POINTER'; Exit; end;
+  L := LowerCase(Pointee);
+  if (L = 'byte') or (L = 'word') or (L = 'short') or (L = 'integer')
+     or (L = 'dword') or (L = 'long') or (L = 'int64') or (L = 'uint64')
+     or (L = 'single') or (L = 'double') or (L = 'string')
+     or (L = 'pointer') or (L = 'pchar') or (L = 'ptrint')
+     or (L = 'bool') or (L = 'boolean') then
+  begin
+    Result := 'POINTER';
+    Exit;
+  end;
+  { Reject anything that doesn't look like a bare identifier — e.g.
+    array-decoration `Foo(N)` or stray spaces — so we don't emit a
+    syntactically broken alias. }
+  if (Pos('(', Pointee) > 0) or (Pos(' ', Pointee) > 0)
+     or (Pos(',', Pointee) > 0) then
+  begin
+    Result := 'POINTER';
+    Exit;
+  end;
+  FPointerAliases.Add(Pointee);
+  Result := 'P' + Pointee;
+end;
+
+{ Recursively touch every pointer-bearing position in T so that
+  AliasPointer registers each pointee before the main emit pass.
+  The result of MapType is discarded; the side effects on
+  FPointerAliases / FTypedefAliases are what matter. }
+procedure TRqBasicEmitter.WalkTypeForAliases(T: TBindingType);
+var
+  J: Integer;
+  Discard: string;
+begin
+  if T = nil then Exit;
+  Discard := MapType(T);
+  if Discard = '' then ;
+  if T.Pointee <> nil then WalkTypeForAliases(T.Pointee);
+  if T.FuncReturn <> nil then WalkTypeForAliases(T.FuncReturn);
+  if T.FuncParams <> nil then
+    for J := 0 to T.FuncParams.Count - 1 do
+      WalkTypeForAliases(T.FuncParams.Items[J]);
+end;
+
+procedure TRqBasicEmitter.CollectPointerAliases(U: TBindingUnit);
+var
+  I, J: Integer;
+  D: TBindingDecl;
+  F: TBindingFunction;
+  R: TBindingRecord;
+  Td: TBindingTypedef;
+begin
+  for I := 0 to U.Decls.Count - 1 do
+  begin
+    D := U.Decls.Items[I];
+    if D is TBindingFunction then
+    begin
+      F := TBindingFunction(D);
+      WalkTypeForAliases(F.ReturnType);
+      for J := 0 to F.Params.Count - 1 do
+        WalkTypeForAliases(F.Params.Items[J].ParamType);
+    end
+    else if D is TBindingRecord then
+    begin
+      R := TBindingRecord(D);
+      for J := 0 to R.Fields.Count - 1 do
+        WalkTypeForAliases(R.Fields.Items[J].FieldType);
+    end
+    else if D is TBindingTypedef then
+    begin
+      Td := TBindingTypedef(D);
+      WalkTypeForAliases(Td.Aliased);
+    end;
+  end;
+end;
+
+{ Map a C type to its rqbasic equivalent. Pointer-to-T becomes the
+  typed alias `PT` (via AliasPointer), with char*/void*/function-
+  pointer/va_list staying as plain POINTER. }
 function TRqBasicEmitter.MapType(T: TBindingType): string;
 var
   Inner: string;
@@ -223,8 +332,22 @@ begin
     Exit;
   end;
   case T.Kind of
-    tkPointer, tkFunctionPointer, tkVaList:
+    tkFunctionPointer, tkVaList:
       Result := 'POINTER';
+    tkPointer:
+      begin
+        if T.Pointee = nil then
+          Result := 'POINTER'
+        else if T.Pointee.Kind in [tkFunctionPointer, tkVaList] then
+          Result := 'POINTER'
+        else if (T.Pointee.Kind = tkPrimitive)
+                and ((Trim(T.Pointee.Spelling) = 'char')
+                     or (Trim(T.Pointee.Spelling) = 'const char')
+                     or (Trim(T.Pointee.Spelling) = 'void')) then
+          Result := 'POINTER'
+        else
+          Result := AliasPointer(MapType(T.Pointee));
+      end;
     tkArray:
       begin
         if T.Pointee = nil then
@@ -243,6 +366,9 @@ begin
         else if Copy(Inner, 1, 6) = 'union '   then Delete(Inner, 1, 6)
         else if Copy(Inner, 1, 5) = 'enum '    then Delete(Inner, 1, 5);
         if (T.Kind = tkTypedefRef)
+           and (FTypedefAliases.IndexOfName(Inner) >= 0) then
+          Result := FTypedefAliases.Values[Inner]
+        else if (T.Kind = tkTypedefRef)
            and (FDeclaredTypeNames.IndexOf(Inner) < 0)
            and (T.CanonicalSpelling <> '') then
         begin
@@ -254,6 +380,11 @@ begin
         else if (T.Kind = tkEnumRef)
                 and (FDeclaredTypeNames.IndexOf(Inner) < 0) then
           Result := 'INTEGER'
+        else if (FDeclaredTypeNames.IndexOf(Inner) < 0) then
+          { Last-resort: an unknown typedef/record name with no
+            canonical hint -> POINTER (opaque). Beats emitting a name
+            that rqbasic can't resolve at semantic-analysis time. }
+          Result := 'POINTER'
         else
           Result := Inner;
       end;
@@ -391,10 +522,26 @@ begin
               [EscapeIdent(T.Name), Aliased]));
 end;
 
+{ Pascal-style hex `$ABCD` -> rqbasic `&HABCD`. The IR parser
+  normalises C `0x...` to `$...`; rqbasic's lexer rejects `$` as a
+  hex prefix (it's a directive marker), so we rewrite per emit. }
+function RqHexLit(const Raw: string): string;
+var
+  S: string;
+begin
+  S := Trim(Raw);
+  if (S <> '') and (S[1] = '-') and (Length(S) > 1) and (S[2] = '$') then
+    Result := '-&H' + Copy(S, 3, MaxInt)
+  else if (S <> '') and (S[1] = '$') then
+    Result := '&H' + Copy(S, 2, MaxInt)
+  else
+    Result := Raw;
+end;
+
 procedure TRqBasicEmitter.EmitMacro(M: TBindingMacroConst);
 begin
   if M.RawComment <> '' then Line(RawComment(M.RawComment));
-  Line(Format('CONST %s = %s', [EscapeIdent(M.Name), M.RawValue]));
+  Line(Format('CONST %s = %s', [EscapeIdent(M.Name), RqHexLit(M.RawValue)]));
 end;
 
 function BlaiseRejectsMacro(const RawValue: string): Boolean;
@@ -423,10 +570,15 @@ function TRqBasicEmitter.Emit(U: TBindingUnit): string;
 var
   I: Integer;
   D: TBindingDecl;
+  Td: TBindingTypedef;
+  AT: TBindingType;
+  Mapped: string;
 begin
   FOutput.Clear;
   FEmittedTypes.Clear;
   FDeclaredTypeNames.Clear;
+  FTypedefAliases.Clear;
+  FPointerAliases.Clear;
   for I := 0 to U.Decls.Count - 1 do
   begin
     D := U.Decls.Items[I];
@@ -441,11 +593,66 @@ begin
     if D is TBindingTypedef then Continue;
     FDeclaredTypeNames.Add(D.Name);
   end;
+  { Build the typedef -> primitive replacement table so MapType can
+    substitute references in field/param positions. Only handles the
+    cases rqbasic actually needs: typedef-of-primitive, typedef-of-
+    enum, typedef-of-pointer-shape (collapse to POINTER), and typedef
+    chains that resolve through CanonicalSpelling. Records / unions
+    keep their name and are looked up via FDeclaredTypeNames. }
+  for I := 0 to U.Decls.Count - 1 do
+  begin
+    D := U.Decls.Items[I];
+    if not (D is TBindingTypedef) then Continue;
+    Td := TBindingTypedef(D);
+    AT := Td.Aliased;
+    if AT = nil then Continue;
+    Mapped := '';
+    case AT.Kind of
+      tkPrimitive:
+        Mapped := MapPrimitive(AT.Spelling, AT.ByteSize);
+      tkPointer, tkFunctionPointer, tkArray, tkVaList:
+        Mapped := 'POINTER';
+      tkEnumRef:
+        Mapped := 'INTEGER';
+      tkTypedefRef, tkRecordRef:
+        begin
+          { If it chains to a known canonical primitive use it;
+            otherwise leave to MapType to figure out at use site. }
+          if (AT.Kind = tkTypedefRef) and (AT.CanonicalSpelling <> '') then
+          begin
+            if Copy(AT.CanonicalSpelling, 1, 5) = 'enum ' then
+              Mapped := 'INTEGER'
+            else if Copy(AT.CanonicalSpelling, 1, 7) = 'struct ' then
+              Mapped := ''  { keep struct name reachable via canonical }
+            else
+              Mapped := MapPrimitive(AT.CanonicalSpelling, AT.ByteSize);
+          end;
+        end;
+    end;
+    if Mapped <> '' then
+      FTypedefAliases.Values[Td.Name] := Mapped;
+  end;
+
+  { Walk every type position to populate FPointerAliases ahead of
+    emit — rqbasic accepts forward-declared pointees, so we can dump
+    all aliases at the top regardless of declaration order. }
+  CollectPointerAliases(U);
 
   EmitProvenance(U);
   Line;
   Line('$CALLING CDECL');
   Line;
+
+  { Typed pointer aliases: `TYPE PFoo AS Foo Ptr`. Foo may not be
+    declared yet — rqbasic treats it as a forward declaration when
+    the alias precedes the TYPE block. }
+  if FPointerAliases.Count > 0 then
+  begin
+    for I := 0 to FPointerAliases.Count - 1 do
+      Line(Format('TYPE P%s AS %s Ptr',
+                  [FPointerAliases[I], EscapeIdent(FPointerAliases[I])]));
+    Line;
+  end;
 
   { Types first (TYPE blocks, enum CONSTs, typedef notes). }
   for I := 0 to U.Decls.Count - 1 do
