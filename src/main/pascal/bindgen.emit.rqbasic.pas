@@ -110,7 +110,9 @@ begin
   FDeclaredTypeNames.Sorted := True;
   FDeclaredTypeNames.Duplicates := dupIgnore;
   FTypedefAliases := TStringList.Create;
-  FTypedefAliases.Sorted := True;
+  { Not sorted: Values[name] := newvalue replacements on a sorted
+    list raise EStringListError, and headers commonly re-typedef the
+    same name multiple times. }
   FTypedefAliases.Duplicates := dupIgnore;
   FPointerAliases := TStringList.Create;
   FPointerAliases.Sorted := True;
@@ -616,8 +618,6 @@ begin
         Mapped := 'INTEGER';
       tkTypedefRef, tkRecordRef:
         begin
-          { If it chains to a known canonical primitive use it;
-            otherwise leave to MapType to figure out at use site. }
           if (AT.Kind = tkTypedefRef) and (AT.CanonicalSpelling <> '') then
           begin
             if Copy(AT.CanonicalSpelling, 1, 5) = 'enum ' then
@@ -626,6 +626,19 @@ begin
               Mapped := ''  { keep struct name reachable via canonical }
             else
               Mapped := MapPrimitive(AT.CanonicalSpelling, AT.ByteSize);
+          end
+          else if AT.Kind = tkRecordRef then
+          begin
+            { typedef-of-struct (`typedef struct _GdkPixbuf GdkPixbuf;`)
+              — the parser doesn't fill CanonicalSpelling for record
+              typedefs, so we route through the record's stripped name
+              if it's actually declared. That makes `GdkPixbuf*` map to
+              `_GdkPixbuf` -> AliasPointer -> `P_GdkPixbuf` at the
+              pointer level. }
+            Mapped := AT.Spelling;
+            if Copy(Mapped, 1, 7) = 'struct ' then Delete(Mapped, 1, 7)
+            else if Copy(Mapped, 1, 6) = 'union '  then Delete(Mapped, 1, 6);
+            if FDeclaredTypeNames.IndexOf(Mapped) < 0 then Mapped := '';
           end;
         end;
     end;
