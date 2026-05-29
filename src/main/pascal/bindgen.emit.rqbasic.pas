@@ -448,7 +448,9 @@ begin
             and (Trim(F.ReturnType.Spelling) = 'void') then RetType := '';
   end;
 
-  if RetType = '' then Kind := 'SUB' else Kind := 'FUNCTION';
+  { Pad SUB to FUNCTION's width so the routine name column aligns
+    across both kinds — a stretch of mixed DECLAREs stays scannable. }
+  if RetType = '' then Kind := 'SUB     ' else Kind := 'FUNCTION';
   Sig := Format('DECLARE %s %s %sALIAS "%s" %s',
                 [Kind, PascalName, LibClause, F.Name, Params]);
   if RetType <> '' then Sig := Sig + ' AS ' + RetType;
