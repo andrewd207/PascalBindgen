@@ -7,6 +7,20 @@ $INCLUDE "sqlite3_rqbasic.bas"
 DIM db AS Psqlite3
 DIM rc AS INTEGER
 DIM errmsg AS POINTER
+DIM row_count AS INTEGER
+DIM col_count AS INTEGER
+
+' SELECT callback. sqlite3 hands us (userdata, argc, argv, colnames)
+' for each result row and expects an INTEGER back — non-zero aborts
+' the scan, 0 keeps it going. We bump a global counter; argv and
+' colnames stay as POINTER on this side because rqbasic doesn't yet
+' grow a deref-by-index form for `char**`. argc is enough to tell
+' us how wide the result set is.
+FUNCTION OnRow (ud AS POINTER, argc AS INTEGER, argv AS POINTER, names AS POINTER) AS INTEGER
+  row_count = row_count + 1
+  col_count = argc
+  OnRow = 0
+END FUNCTION
 
 rc = sqlite3_open(PCHAR(":memory:"), VARPTR(db))
 IF rc <> 0 THEN
@@ -31,5 +45,17 @@ IF rc <> 0 THEN
 END IF
 
 PRINT "sqlite demo OK — 3 rows inserted into :memory: db"
+
+' SELECT through the callback — three rows expected, two columns.
+row_count = 0
+col_count = 0
+rc = sqlite3_exec(db, _
+                  PCHAR("SELECT id, name FROM t ORDER BY id"), _
+                  @OnRow, null, VARPTR(errmsg))
+IF rc <> 0 THEN
+  PRINT "SELECT failed, rc="; rc
+  HALT
+END IF
+PRINT "SELECT callback fired "; row_count; " times, "; col_count; " columns each"
 
 sqlite3_close(db)
