@@ -181,11 +181,19 @@ begin
 end;
 
 function TRqBasicEmitter.LibClause: string;
+var
+  L: string;
 begin
-  if FLibrary <> '' then
-    Result := Format('LIB "%s" ', [FLibrary])
-  else
-    Result := '';
+  if FLibrary = '' then begin Result := ''; Exit; end;
+  { rapidq now turns DECLARE LIB "foo" into a linker -lfoo; the
+    Unix `lib` prefix is added by the linker itself. Strip a leading
+    `lib` so the user-supplied `--library libGL` doesn't become
+    `-llibGL`. The Windows DECLARE LIB usage (kernel32, user32, ...)
+    is unaffected since those names have no `lib` prefix. }
+  L := FLibrary;
+  if (Length(L) > 3) and (LowerCase(Copy(L, 1, 3)) = 'lib') then
+    L := Copy(L, 4, MaxInt);
+  Result := Format('LIB "%s" ', [L]);
 end;
 
 { C primitive → rqbasic built-in. Width choices honour the active

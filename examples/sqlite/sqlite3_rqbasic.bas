@@ -514,294 +514,294 @@ CONST FTS5_TOKENIZE_DOCUMENT = &H0004
 CONST FTS5_TOKENIZE_AUX = &H0008
 CONST FTS5_TOKEN_COLOCATED = &H0001
 
-DECLARE FUNCTION sqlite3_libversion LIB "libsqlite3" ALIAS "sqlite3_libversion" () AS POINTER
-DECLARE FUNCTION sqlite3_sourceid LIB "libsqlite3" ALIAS "sqlite3_sourceid" () AS POINTER
-DECLARE FUNCTION sqlite3_libversion_number LIB "libsqlite3" ALIAS "sqlite3_libversion_number" () AS INTEGER
-DECLARE FUNCTION sqlite3_compileoption_used LIB "libsqlite3" ALIAS "sqlite3_compileoption_used" (zOptName AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_compileoption_get LIB "libsqlite3" ALIAS "sqlite3_compileoption_get" (N AS INTEGER) AS POINTER
-DECLARE FUNCTION sqlite3_threadsafe LIB "libsqlite3" ALIAS "sqlite3_threadsafe" () AS INTEGER
-DECLARE FUNCTION sqlite3_close LIB "libsqlite3" ALIAS "sqlite3_close" (arg1 AS Psqlite3) AS INTEGER
-DECLARE FUNCTION sqlite3_close_v2 LIB "libsqlite3" ALIAS "sqlite3_close_v2" (arg1 AS Psqlite3) AS INTEGER
-DECLARE FUNCTION sqlite3_exec LIB "libsqlite3" ALIAS "sqlite3_exec" (arg1 AS Psqlite3, sql AS POINTER, callback AS POINTER, arg4 AS POINTER, errmsg AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_initialize LIB "libsqlite3" ALIAS "sqlite3_initialize" () AS INTEGER
-DECLARE FUNCTION sqlite3_shutdown LIB "libsqlite3" ALIAS "sqlite3_shutdown" () AS INTEGER
-DECLARE FUNCTION sqlite3_os_init LIB "libsqlite3" ALIAS "sqlite3_os_init" () AS INTEGER
-DECLARE FUNCTION sqlite3_os_end LIB "libsqlite3" ALIAS "sqlite3_os_end" () AS INTEGER
-DECLARE FUNCTION sqlite3_config LIB "libsqlite3" ALIAS "sqlite3_config" (arg1 AS INTEGER) AS INTEGER  ' varargs — call via wrapper
-DECLARE FUNCTION sqlite3_db_config LIB "libsqlite3" ALIAS "sqlite3_db_config" (arg1 AS Psqlite3, op AS INTEGER) AS INTEGER  ' varargs — call via wrapper
-DECLARE FUNCTION sqlite3_extended_result_codes LIB "libsqlite3" ALIAS "sqlite3_extended_result_codes" (arg1 AS Psqlite3, onoff AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_last_insert_rowid LIB "libsqlite3" ALIAS "sqlite3_last_insert_rowid" (arg1 AS Psqlite3) AS INT64
-DECLARE SUB      sqlite3_set_last_insert_rowid LIB "libsqlite3" ALIAS "sqlite3_set_last_insert_rowid" (arg1 AS Psqlite3, arg2 AS INT64)
-DECLARE FUNCTION sqlite3_changes LIB "libsqlite3" ALIAS "sqlite3_changes" (arg1 AS Psqlite3) AS INTEGER
-DECLARE FUNCTION sqlite3_changes64 LIB "libsqlite3" ALIAS "sqlite3_changes64" (arg1 AS Psqlite3) AS INT64
-DECLARE FUNCTION sqlite3_total_changes LIB "libsqlite3" ALIAS "sqlite3_total_changes" (arg1 AS Psqlite3) AS INTEGER
-DECLARE FUNCTION sqlite3_total_changes64 LIB "libsqlite3" ALIAS "sqlite3_total_changes64" (arg1 AS Psqlite3) AS INT64
-DECLARE SUB      sqlite3_interrupt LIB "libsqlite3" ALIAS "sqlite3_interrupt" (arg1 AS Psqlite3)
-DECLARE FUNCTION sqlite3_is_interrupted LIB "libsqlite3" ALIAS "sqlite3_is_interrupted" (arg1 AS Psqlite3) AS INTEGER
-DECLARE FUNCTION sqlite3_complete LIB "libsqlite3" ALIAS "sqlite3_complete" (sql AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_complete16 LIB "libsqlite3" ALIAS "sqlite3_complete16" (sql AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_busy_handler LIB "libsqlite3" ALIAS "sqlite3_busy_handler" (arg1 AS Psqlite3, arg2 AS POINTER, arg3 AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_busy_timeout LIB "libsqlite3" ALIAS "sqlite3_busy_timeout" (arg1 AS Psqlite3, ms AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_get_table LIB "libsqlite3" ALIAS "sqlite3_get_table" (db AS Psqlite3, zSql AS POINTER, pazResult AS POINTER, pnRow AS POINTER, pnColumn AS POINTER, pzErrmsg AS POINTER) AS INTEGER
-DECLARE SUB      sqlite3_free_table LIB "libsqlite3" ALIAS "sqlite3_free_table" (result AS POINTER)
-DECLARE FUNCTION sqlite3_mprintf LIB "libsqlite3" ALIAS "sqlite3_mprintf" (arg1 AS POINTER) AS POINTER  ' varargs — call via wrapper
-DECLARE FUNCTION sqlite3_vmprintf LIB "libsqlite3" ALIAS "sqlite3_vmprintf" (arg1 AS POINTER, arg2 AS POINTER) AS POINTER
-DECLARE FUNCTION sqlite3_snprintf LIB "libsqlite3" ALIAS "sqlite3_snprintf" (arg1 AS INTEGER, arg2 AS POINTER, arg3 AS POINTER) AS POINTER  ' varargs — call via wrapper
-DECLARE FUNCTION sqlite3_vsnprintf LIB "libsqlite3" ALIAS "sqlite3_vsnprintf" (arg1 AS INTEGER, arg2 AS POINTER, arg3 AS POINTER, arg4 AS POINTER) AS POINTER
-DECLARE FUNCTION sqlite3_malloc LIB "libsqlite3" ALIAS "sqlite3_malloc" (arg1 AS INTEGER) AS POINTER
-DECLARE FUNCTION sqlite3_malloc64 LIB "libsqlite3" ALIAS "sqlite3_malloc64" (arg1 AS UINT64) AS POINTER
-DECLARE FUNCTION sqlite3_realloc LIB "libsqlite3" ALIAS "sqlite3_realloc" (arg1 AS POINTER, arg2 AS INTEGER) AS POINTER
-DECLARE FUNCTION sqlite3_realloc64 LIB "libsqlite3" ALIAS "sqlite3_realloc64" (arg1 AS POINTER, arg2 AS UINT64) AS POINTER
-DECLARE SUB      sqlite3_free LIB "libsqlite3" ALIAS "sqlite3_free" (arg1 AS POINTER)
-DECLARE FUNCTION sqlite3_msize LIB "libsqlite3" ALIAS "sqlite3_msize" (arg1 AS POINTER) AS UINT64
-DECLARE FUNCTION sqlite3_memory_used LIB "libsqlite3" ALIAS "sqlite3_memory_used" () AS INT64
-DECLARE FUNCTION sqlite3_memory_highwater LIB "libsqlite3" ALIAS "sqlite3_memory_highwater" (resetFlag AS INTEGER) AS INT64
-DECLARE SUB      sqlite3_randomness LIB "libsqlite3" ALIAS "sqlite3_randomness" (N AS INTEGER, P AS POINTER)
-DECLARE FUNCTION sqlite3_set_authorizer LIB "libsqlite3" ALIAS "sqlite3_set_authorizer" (arg1 AS Psqlite3, xAuth AS POINTER, pUserData AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_trace LIB "libsqlite3" ALIAS "sqlite3_trace" (arg1 AS Psqlite3, xTrace AS POINTER, arg3 AS POINTER) AS POINTER
-DECLARE FUNCTION sqlite3_profile LIB "libsqlite3" ALIAS "sqlite3_profile" (arg1 AS Psqlite3, xProfile AS POINTER, arg3 AS POINTER) AS POINTER
-DECLARE FUNCTION sqlite3_trace_v2 LIB "libsqlite3" ALIAS "sqlite3_trace_v2" (arg1 AS Psqlite3, uMask AS DWORD, xCallback AS POINTER, pCtx AS POINTER) AS INTEGER
-DECLARE SUB      sqlite3_progress_handler LIB "libsqlite3" ALIAS "sqlite3_progress_handler" (arg1 AS Psqlite3, arg2 AS INTEGER, arg3 AS POINTER, arg4 AS POINTER)
-DECLARE FUNCTION sqlite3_open LIB "libsqlite3" ALIAS "sqlite3_open" (filename AS POINTER, ppDb AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_open16 LIB "libsqlite3" ALIAS "sqlite3_open16" (filename AS POINTER, ppDb AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_open_v2 LIB "libsqlite3" ALIAS "sqlite3_open_v2" (filename AS POINTER, ppDb AS POINTER, flags AS INTEGER, zVfs AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_uri_parameter LIB "libsqlite3" ALIAS "sqlite3_uri_parameter" (z AS POINTER, zParam AS POINTER) AS POINTER
-DECLARE FUNCTION sqlite3_uri_boolean LIB "libsqlite3" ALIAS "sqlite3_uri_boolean" (z AS POINTER, zParam AS POINTER, bDefault AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_uri_int64 LIB "libsqlite3" ALIAS "sqlite3_uri_int64" (arg1 AS POINTER, arg2 AS POINTER, arg3 AS INT64) AS INT64
-DECLARE FUNCTION sqlite3_uri_key LIB "libsqlite3" ALIAS "sqlite3_uri_key" (z AS POINTER, N AS INTEGER) AS POINTER
-DECLARE FUNCTION sqlite3_filename_database LIB "libsqlite3" ALIAS "sqlite3_filename_database" (arg1 AS POINTER) AS POINTER
-DECLARE FUNCTION sqlite3_filename_journal LIB "libsqlite3" ALIAS "sqlite3_filename_journal" (arg1 AS POINTER) AS POINTER
-DECLARE FUNCTION sqlite3_filename_wal LIB "libsqlite3" ALIAS "sqlite3_filename_wal" (arg1 AS POINTER) AS POINTER
-DECLARE FUNCTION sqlite3_database_file_object LIB "libsqlite3" ALIAS "sqlite3_database_file_object" (arg1 AS POINTER) AS Psqlite3_file
-DECLARE FUNCTION sqlite3_create_filename LIB "libsqlite3" ALIAS "sqlite3_create_filename" (zDatabase AS POINTER, zJournal AS POINTER, zWal AS POINTER, nParam AS INTEGER, azParam AS POINTER) AS POINTER
-DECLARE SUB      sqlite3_free_filename LIB "libsqlite3" ALIAS "sqlite3_free_filename" (arg1 AS POINTER)
-DECLARE FUNCTION sqlite3_errcode LIB "libsqlite3" ALIAS "sqlite3_errcode" (db AS Psqlite3) AS INTEGER
-DECLARE FUNCTION sqlite3_extended_errcode LIB "libsqlite3" ALIAS "sqlite3_extended_errcode" (db AS Psqlite3) AS INTEGER
-DECLARE FUNCTION sqlite3_errmsg LIB "libsqlite3" ALIAS "sqlite3_errmsg" (arg1 AS Psqlite3) AS POINTER
-DECLARE FUNCTION sqlite3_errmsg16 LIB "libsqlite3" ALIAS "sqlite3_errmsg16" (arg1 AS Psqlite3) AS POINTER
-DECLARE FUNCTION sqlite3_errstr LIB "libsqlite3" ALIAS "sqlite3_errstr" (arg1 AS INTEGER) AS POINTER
-DECLARE FUNCTION sqlite3_error_offset LIB "libsqlite3" ALIAS "sqlite3_error_offset" (db AS Psqlite3) AS INTEGER
-DECLARE FUNCTION sqlite3_limit LIB "libsqlite3" ALIAS "sqlite3_limit" (arg1 AS Psqlite3, id AS INTEGER, newVal AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_prepare LIB "libsqlite3" ALIAS "sqlite3_prepare" (db AS Psqlite3, zSql AS POINTER, nByte AS INTEGER, ppStmt AS POINTER, pzTail AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_prepare_v2 LIB "libsqlite3" ALIAS "sqlite3_prepare_v2" (db AS Psqlite3, zSql AS POINTER, nByte AS INTEGER, ppStmt AS POINTER, pzTail AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_prepare_v3 LIB "libsqlite3" ALIAS "sqlite3_prepare_v3" (db AS Psqlite3, zSql AS POINTER, nByte AS INTEGER, prepFlags AS DWORD, ppStmt AS POINTER, pzTail AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_prepare16 LIB "libsqlite3" ALIAS "sqlite3_prepare16" (db AS Psqlite3, zSql AS POINTER, nByte AS INTEGER, ppStmt AS POINTER, pzTail AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_prepare16_v2 LIB "libsqlite3" ALIAS "sqlite3_prepare16_v2" (db AS Psqlite3, zSql AS POINTER, nByte AS INTEGER, ppStmt AS POINTER, pzTail AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_prepare16_v3 LIB "libsqlite3" ALIAS "sqlite3_prepare16_v3" (db AS Psqlite3, zSql AS POINTER, nByte AS INTEGER, prepFlags AS DWORD, ppStmt AS POINTER, pzTail AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_sql LIB "libsqlite3" ALIAS "sqlite3_sql" (pStmt AS Psqlite3_stmt) AS POINTER
-DECLARE FUNCTION sqlite3_expanded_sql LIB "libsqlite3" ALIAS "sqlite3_expanded_sql" (pStmt AS Psqlite3_stmt) AS POINTER
-DECLARE FUNCTION sqlite3_stmt_readonly LIB "libsqlite3" ALIAS "sqlite3_stmt_readonly" (pStmt AS Psqlite3_stmt) AS INTEGER
-DECLARE FUNCTION sqlite3_stmt_isexplain LIB "libsqlite3" ALIAS "sqlite3_stmt_isexplain" (pStmt AS Psqlite3_stmt) AS INTEGER
-DECLARE FUNCTION sqlite3_stmt_explain LIB "libsqlite3" ALIAS "sqlite3_stmt_explain" (pStmt AS Psqlite3_stmt, eMode AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_stmt_busy LIB "libsqlite3" ALIAS "sqlite3_stmt_busy" (arg1 AS Psqlite3_stmt) AS INTEGER
-DECLARE FUNCTION sqlite3_bind_blob LIB "libsqlite3" ALIAS "sqlite3_bind_blob" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, arg3 AS POINTER, n AS INTEGER, arg5 AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_bind_blob64 LIB "libsqlite3" ALIAS "sqlite3_bind_blob64" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, arg3 AS POINTER, arg4 AS UINT64, arg5 AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_bind_double LIB "libsqlite3" ALIAS "sqlite3_bind_double" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, arg3 AS DOUBLE) AS INTEGER
-DECLARE FUNCTION sqlite3_bind_int LIB "libsqlite3" ALIAS "sqlite3_bind_int" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, arg3 AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_bind_int64 LIB "libsqlite3" ALIAS "sqlite3_bind_int64" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, arg3 AS INT64) AS INTEGER
-DECLARE FUNCTION sqlite3_bind_null LIB "libsqlite3" ALIAS "sqlite3_bind_null" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_bind_text LIB "libsqlite3" ALIAS "sqlite3_bind_text" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, arg3 AS POINTER, arg4 AS INTEGER, arg5 AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_bind_text16 LIB "libsqlite3" ALIAS "sqlite3_bind_text16" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, arg3 AS POINTER, arg4 AS INTEGER, arg5 AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_bind_text64 LIB "libsqlite3" ALIAS "sqlite3_bind_text64" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, arg3 AS POINTER, arg4 AS UINT64, arg5 AS POINTER, encoding AS BYTE) AS INTEGER
-DECLARE FUNCTION sqlite3_bind_value LIB "libsqlite3" ALIAS "sqlite3_bind_value" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, arg3 AS Psqlite3_value) AS INTEGER
-DECLARE FUNCTION sqlite3_bind_pointer LIB "libsqlite3" ALIAS "sqlite3_bind_pointer" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, arg3 AS POINTER, arg4 AS POINTER, arg5 AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_bind_zeroblob LIB "libsqlite3" ALIAS "sqlite3_bind_zeroblob" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, n AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_bind_zeroblob64 LIB "libsqlite3" ALIAS "sqlite3_bind_zeroblob64" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, arg3 AS UINT64) AS INTEGER
-DECLARE FUNCTION sqlite3_bind_parameter_count LIB "libsqlite3" ALIAS "sqlite3_bind_parameter_count" (arg1 AS Psqlite3_stmt) AS INTEGER
-DECLARE FUNCTION sqlite3_bind_parameter_name LIB "libsqlite3" ALIAS "sqlite3_bind_parameter_name" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER) AS POINTER
-DECLARE FUNCTION sqlite3_bind_parameter_index LIB "libsqlite3" ALIAS "sqlite3_bind_parameter_index" (arg1 AS Psqlite3_stmt, zName AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_clear_bindings LIB "libsqlite3" ALIAS "sqlite3_clear_bindings" (arg1 AS Psqlite3_stmt) AS INTEGER
-DECLARE FUNCTION sqlite3_column_count LIB "libsqlite3" ALIAS "sqlite3_column_count" (pStmt AS Psqlite3_stmt) AS INTEGER
-DECLARE FUNCTION sqlite3_column_name LIB "libsqlite3" ALIAS "sqlite3_column_name" (arg1 AS Psqlite3_stmt, N AS INTEGER) AS POINTER
-DECLARE FUNCTION sqlite3_column_name16 LIB "libsqlite3" ALIAS "sqlite3_column_name16" (arg1 AS Psqlite3_stmt, N AS INTEGER) AS POINTER
-DECLARE FUNCTION sqlite3_column_database_name LIB "libsqlite3" ALIAS "sqlite3_column_database_name" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER) AS POINTER
-DECLARE FUNCTION sqlite3_column_database_name16 LIB "libsqlite3" ALIAS "sqlite3_column_database_name16" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER) AS POINTER
-DECLARE FUNCTION sqlite3_column_table_name LIB "libsqlite3" ALIAS "sqlite3_column_table_name" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER) AS POINTER
-DECLARE FUNCTION sqlite3_column_table_name16 LIB "libsqlite3" ALIAS "sqlite3_column_table_name16" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER) AS POINTER
-DECLARE FUNCTION sqlite3_column_origin_name LIB "libsqlite3" ALIAS "sqlite3_column_origin_name" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER) AS POINTER
-DECLARE FUNCTION sqlite3_column_origin_name16 LIB "libsqlite3" ALIAS "sqlite3_column_origin_name16" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER) AS POINTER
-DECLARE FUNCTION sqlite3_column_decltype LIB "libsqlite3" ALIAS "sqlite3_column_decltype" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER) AS POINTER
-DECLARE FUNCTION sqlite3_column_decltype16 LIB "libsqlite3" ALIAS "sqlite3_column_decltype16" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER) AS POINTER
-DECLARE FUNCTION sqlite3_step LIB "libsqlite3" ALIAS "sqlite3_step" (arg1 AS Psqlite3_stmt) AS INTEGER
-DECLARE FUNCTION sqlite3_data_count LIB "libsqlite3" ALIAS "sqlite3_data_count" (pStmt AS Psqlite3_stmt) AS INTEGER
-DECLARE FUNCTION sqlite3_column_blob LIB "libsqlite3" ALIAS "sqlite3_column_blob" (arg1 AS Psqlite3_stmt, iCol AS INTEGER) AS POINTER
-DECLARE FUNCTION sqlite3_column_double LIB "libsqlite3" ALIAS "sqlite3_column_double" (arg1 AS Psqlite3_stmt, iCol AS INTEGER) AS DOUBLE
-DECLARE FUNCTION sqlite3_column_int LIB "libsqlite3" ALIAS "sqlite3_column_int" (arg1 AS Psqlite3_stmt, iCol AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_column_int64 LIB "libsqlite3" ALIAS "sqlite3_column_int64" (arg1 AS Psqlite3_stmt, iCol AS INTEGER) AS INT64
-DECLARE FUNCTION sqlite3_column_text LIB "libsqlite3" ALIAS "sqlite3_column_text" (arg1 AS Psqlite3_stmt, iCol AS INTEGER) AS POINTER
-DECLARE FUNCTION sqlite3_column_text16 LIB "libsqlite3" ALIAS "sqlite3_column_text16" (arg1 AS Psqlite3_stmt, iCol AS INTEGER) AS POINTER
-DECLARE FUNCTION sqlite3_column_value LIB "libsqlite3" ALIAS "sqlite3_column_value" (arg1 AS Psqlite3_stmt, iCol AS INTEGER) AS Psqlite3_value
-DECLARE FUNCTION sqlite3_column_bytes LIB "libsqlite3" ALIAS "sqlite3_column_bytes" (arg1 AS Psqlite3_stmt, iCol AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_column_bytes16 LIB "libsqlite3" ALIAS "sqlite3_column_bytes16" (arg1 AS Psqlite3_stmt, iCol AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_column_type LIB "libsqlite3" ALIAS "sqlite3_column_type" (arg1 AS Psqlite3_stmt, iCol AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_finalize LIB "libsqlite3" ALIAS "sqlite3_finalize" (pStmt AS Psqlite3_stmt) AS INTEGER
-DECLARE FUNCTION sqlite3_reset LIB "libsqlite3" ALIAS "sqlite3_reset" (pStmt AS Psqlite3_stmt) AS INTEGER
-DECLARE FUNCTION sqlite3_create_function LIB "libsqlite3" ALIAS "sqlite3_create_function" (db AS Psqlite3, zFunctionName AS POINTER, nArg AS INTEGER, eTextRep AS INTEGER, pApp AS POINTER, xFunc AS POINTER, xStep AS POINTER, xFinal AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_create_function16 LIB "libsqlite3" ALIAS "sqlite3_create_function16" (db AS Psqlite3, zFunctionName AS POINTER, nArg AS INTEGER, eTextRep AS INTEGER, pApp AS POINTER, xFunc AS POINTER, xStep AS POINTER, xFinal AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_create_function_v2 LIB "libsqlite3" ALIAS "sqlite3_create_function_v2" (db AS Psqlite3, zFunctionName AS POINTER, nArg AS INTEGER, eTextRep AS INTEGER, pApp AS POINTER, xFunc AS POINTER, xStep AS POINTER, xFinal AS POINTER, xDestroy AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_create_window_function LIB "libsqlite3" ALIAS "sqlite3_create_window_function" (db AS Psqlite3, zFunctionName AS POINTER, nArg AS INTEGER, eTextRep AS INTEGER, pApp AS POINTER, xStep AS POINTER, xFinal AS POINTER, xValue AS POINTER, xInverse AS POINTER, xDestroy AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_aggregate_count LIB "libsqlite3" ALIAS "sqlite3_aggregate_count" (arg1 AS Psqlite3_context) AS INTEGER
-DECLARE FUNCTION sqlite3_expired LIB "libsqlite3" ALIAS "sqlite3_expired" (arg1 AS Psqlite3_stmt) AS INTEGER
-DECLARE FUNCTION sqlite3_transfer_bindings LIB "libsqlite3" ALIAS "sqlite3_transfer_bindings" (arg1 AS Psqlite3_stmt, arg2 AS Psqlite3_stmt) AS INTEGER
-DECLARE FUNCTION sqlite3_global_recover LIB "libsqlite3" ALIAS "sqlite3_global_recover" () AS INTEGER
-DECLARE SUB      sqlite3_thread_cleanup LIB "libsqlite3" ALIAS "sqlite3_thread_cleanup" ()
-DECLARE FUNCTION sqlite3_memory_alarm LIB "libsqlite3" ALIAS "sqlite3_memory_alarm" (arg1 AS POINTER, arg2 AS POINTER, arg3 AS INT64) AS INTEGER
-DECLARE FUNCTION sqlite3_value_blob LIB "libsqlite3" ALIAS "sqlite3_value_blob" (arg1 AS Psqlite3_value) AS POINTER
-DECLARE FUNCTION sqlite3_value_double LIB "libsqlite3" ALIAS "sqlite3_value_double" (arg1 AS Psqlite3_value) AS DOUBLE
-DECLARE FUNCTION sqlite3_value_int LIB "libsqlite3" ALIAS "sqlite3_value_int" (arg1 AS Psqlite3_value) AS INTEGER
-DECLARE FUNCTION sqlite3_value_int64 LIB "libsqlite3" ALIAS "sqlite3_value_int64" (arg1 AS Psqlite3_value) AS INT64
-DECLARE FUNCTION sqlite3_value_pointer LIB "libsqlite3" ALIAS "sqlite3_value_pointer" (arg1 AS Psqlite3_value, arg2 AS POINTER) AS POINTER
-DECLARE FUNCTION sqlite3_value_text LIB "libsqlite3" ALIAS "sqlite3_value_text" (arg1 AS Psqlite3_value) AS POINTER
-DECLARE FUNCTION sqlite3_value_text16 LIB "libsqlite3" ALIAS "sqlite3_value_text16" (arg1 AS Psqlite3_value) AS POINTER
-DECLARE FUNCTION sqlite3_value_text16le LIB "libsqlite3" ALIAS "sqlite3_value_text16le" (arg1 AS Psqlite3_value) AS POINTER
-DECLARE FUNCTION sqlite3_value_text16be LIB "libsqlite3" ALIAS "sqlite3_value_text16be" (arg1 AS Psqlite3_value) AS POINTER
-DECLARE FUNCTION sqlite3_value_bytes LIB "libsqlite3" ALIAS "sqlite3_value_bytes" (arg1 AS Psqlite3_value) AS INTEGER
-DECLARE FUNCTION sqlite3_value_bytes16 LIB "libsqlite3" ALIAS "sqlite3_value_bytes16" (arg1 AS Psqlite3_value) AS INTEGER
-DECLARE FUNCTION sqlite3_value_type LIB "libsqlite3" ALIAS "sqlite3_value_type" (arg1 AS Psqlite3_value) AS INTEGER
-DECLARE FUNCTION sqlite3_value_numeric_type LIB "libsqlite3" ALIAS "sqlite3_value_numeric_type" (arg1 AS Psqlite3_value) AS INTEGER
-DECLARE FUNCTION sqlite3_value_nochange LIB "libsqlite3" ALIAS "sqlite3_value_nochange" (arg1 AS Psqlite3_value) AS INTEGER
-DECLARE FUNCTION sqlite3_value_frombind LIB "libsqlite3" ALIAS "sqlite3_value_frombind" (arg1 AS Psqlite3_value) AS INTEGER
-DECLARE FUNCTION sqlite3_value_encoding LIB "libsqlite3" ALIAS "sqlite3_value_encoding" (arg1 AS Psqlite3_value) AS INTEGER
-DECLARE FUNCTION sqlite3_value_subtype LIB "libsqlite3" ALIAS "sqlite3_value_subtype" (arg1 AS Psqlite3_value) AS DWORD
-DECLARE FUNCTION sqlite3_value_dup LIB "libsqlite3" ALIAS "sqlite3_value_dup" (arg1 AS Psqlite3_value) AS Psqlite3_value
-DECLARE SUB      sqlite3_value_free LIB "libsqlite3" ALIAS "sqlite3_value_free" (arg1 AS Psqlite3_value)
-DECLARE FUNCTION sqlite3_aggregate_context LIB "libsqlite3" ALIAS "sqlite3_aggregate_context" (arg1 AS Psqlite3_context, nBytes AS INTEGER) AS POINTER
-DECLARE FUNCTION sqlite3_user_data LIB "libsqlite3" ALIAS "sqlite3_user_data" (arg1 AS Psqlite3_context) AS POINTER
-DECLARE FUNCTION sqlite3_context_db_handle LIB "libsqlite3" ALIAS "sqlite3_context_db_handle" (arg1 AS Psqlite3_context) AS Psqlite3
-DECLARE FUNCTION sqlite3_get_auxdata LIB "libsqlite3" ALIAS "sqlite3_get_auxdata" (arg1 AS Psqlite3_context, N AS INTEGER) AS POINTER
-DECLARE SUB      sqlite3_set_auxdata LIB "libsqlite3" ALIAS "sqlite3_set_auxdata" (arg1 AS Psqlite3_context, N AS INTEGER, arg3 AS POINTER, arg4 AS POINTER)
-DECLARE FUNCTION sqlite3_get_clientdata LIB "libsqlite3" ALIAS "sqlite3_get_clientdata" (arg1 AS Psqlite3, arg2 AS POINTER) AS POINTER
-DECLARE FUNCTION sqlite3_set_clientdata LIB "libsqlite3" ALIAS "sqlite3_set_clientdata" (arg1 AS Psqlite3, arg2 AS POINTER, arg3 AS POINTER, arg4 AS POINTER) AS INTEGER
-DECLARE SUB      sqlite3_result_blob LIB "libsqlite3" ALIAS "sqlite3_result_blob" (arg1 AS Psqlite3_context, arg2 AS POINTER, arg3 AS INTEGER, arg4 AS POINTER)
-DECLARE SUB      sqlite3_result_blob64 LIB "libsqlite3" ALIAS "sqlite3_result_blob64" (arg1 AS Psqlite3_context, arg2 AS POINTER, arg3 AS UINT64, arg4 AS POINTER)
-DECLARE SUB      sqlite3_result_double LIB "libsqlite3" ALIAS "sqlite3_result_double" (arg1 AS Psqlite3_context, arg2 AS DOUBLE)
-DECLARE SUB      sqlite3_result_error LIB "libsqlite3" ALIAS "sqlite3_result_error" (arg1 AS Psqlite3_context, arg2 AS POINTER, arg3 AS INTEGER)
-DECLARE SUB      sqlite3_result_error16 LIB "libsqlite3" ALIAS "sqlite3_result_error16" (arg1 AS Psqlite3_context, arg2 AS POINTER, arg3 AS INTEGER)
-DECLARE SUB      sqlite3_result_error_toobig LIB "libsqlite3" ALIAS "sqlite3_result_error_toobig" (arg1 AS Psqlite3_context)
-DECLARE SUB      sqlite3_result_error_nomem LIB "libsqlite3" ALIAS "sqlite3_result_error_nomem" (arg1 AS Psqlite3_context)
-DECLARE SUB      sqlite3_result_error_code LIB "libsqlite3" ALIAS "sqlite3_result_error_code" (arg1 AS Psqlite3_context, arg2 AS INTEGER)
-DECLARE SUB      sqlite3_result_int LIB "libsqlite3" ALIAS "sqlite3_result_int" (arg1 AS Psqlite3_context, arg2 AS INTEGER)
-DECLARE SUB      sqlite3_result_int64 LIB "libsqlite3" ALIAS "sqlite3_result_int64" (arg1 AS Psqlite3_context, arg2 AS INT64)
-DECLARE SUB      sqlite3_result_null LIB "libsqlite3" ALIAS "sqlite3_result_null" (arg1 AS Psqlite3_context)
-DECLARE SUB      sqlite3_result_text LIB "libsqlite3" ALIAS "sqlite3_result_text" (arg1 AS Psqlite3_context, arg2 AS POINTER, arg3 AS INTEGER, arg4 AS POINTER)
-DECLARE SUB      sqlite3_result_text64 LIB "libsqlite3" ALIAS "sqlite3_result_text64" (arg1 AS Psqlite3_context, arg2 AS POINTER, arg3 AS UINT64, arg4 AS POINTER, encoding AS BYTE)
-DECLARE SUB      sqlite3_result_text16 LIB "libsqlite3" ALIAS "sqlite3_result_text16" (arg1 AS Psqlite3_context, arg2 AS POINTER, arg3 AS INTEGER, arg4 AS POINTER)
-DECLARE SUB      sqlite3_result_text16le LIB "libsqlite3" ALIAS "sqlite3_result_text16le" (arg1 AS Psqlite3_context, arg2 AS POINTER, arg3 AS INTEGER, arg4 AS POINTER)
-DECLARE SUB      sqlite3_result_text16be LIB "libsqlite3" ALIAS "sqlite3_result_text16be" (arg1 AS Psqlite3_context, arg2 AS POINTER, arg3 AS INTEGER, arg4 AS POINTER)
-DECLARE SUB      sqlite3_result_value LIB "libsqlite3" ALIAS "sqlite3_result_value" (arg1 AS Psqlite3_context, arg2 AS Psqlite3_value)
-DECLARE SUB      sqlite3_result_pointer LIB "libsqlite3" ALIAS "sqlite3_result_pointer" (arg1 AS Psqlite3_context, arg2 AS POINTER, arg3 AS POINTER, arg4 AS POINTER)
-DECLARE SUB      sqlite3_result_zeroblob LIB "libsqlite3" ALIAS "sqlite3_result_zeroblob" (arg1 AS Psqlite3_context, n AS INTEGER)
-DECLARE FUNCTION sqlite3_result_zeroblob64 LIB "libsqlite3" ALIAS "sqlite3_result_zeroblob64" (arg1 AS Psqlite3_context, n AS UINT64) AS INTEGER
-DECLARE SUB      sqlite3_result_subtype LIB "libsqlite3" ALIAS "sqlite3_result_subtype" (arg1 AS Psqlite3_context, arg2 AS DWORD)
-DECLARE FUNCTION sqlite3_create_collation LIB "libsqlite3" ALIAS "sqlite3_create_collation" (arg1 AS Psqlite3, zName AS POINTER, eTextRep AS INTEGER, pArg AS POINTER, xCompare AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_create_collation_v2 LIB "libsqlite3" ALIAS "sqlite3_create_collation_v2" (arg1 AS Psqlite3, zName AS POINTER, eTextRep AS INTEGER, pArg AS POINTER, xCompare AS POINTER, xDestroy AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_create_collation16 LIB "libsqlite3" ALIAS "sqlite3_create_collation16" (arg1 AS Psqlite3, zName AS POINTER, eTextRep AS INTEGER, pArg AS POINTER, xCompare AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_collation_needed LIB "libsqlite3" ALIAS "sqlite3_collation_needed" (arg1 AS Psqlite3, arg2 AS POINTER, arg3 AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_collation_needed16 LIB "libsqlite3" ALIAS "sqlite3_collation_needed16" (arg1 AS Psqlite3, arg2 AS POINTER, arg3 AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_sleep LIB "libsqlite3" ALIAS "sqlite3_sleep" (arg1 AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_win32_set_directory LIB "libsqlite3" ALIAS "sqlite3_win32_set_directory" (type_ AS UINT64, zValue AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_win32_set_directory8 LIB "libsqlite3" ALIAS "sqlite3_win32_set_directory8" (type_ AS UINT64, zValue AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_win32_set_directory16 LIB "libsqlite3" ALIAS "sqlite3_win32_set_directory16" (type_ AS UINT64, zValue AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_get_autocommit LIB "libsqlite3" ALIAS "sqlite3_get_autocommit" (arg1 AS Psqlite3) AS INTEGER
-DECLARE FUNCTION sqlite3_db_handle LIB "libsqlite3" ALIAS "sqlite3_db_handle" (arg1 AS Psqlite3_stmt) AS Psqlite3
-DECLARE FUNCTION sqlite3_db_name LIB "libsqlite3" ALIAS "sqlite3_db_name" (db AS Psqlite3, N AS INTEGER) AS POINTER
-DECLARE FUNCTION sqlite3_db_filename LIB "libsqlite3" ALIAS "sqlite3_db_filename" (db AS Psqlite3, zDbName AS POINTER) AS POINTER
-DECLARE FUNCTION sqlite3_db_readonly LIB "libsqlite3" ALIAS "sqlite3_db_readonly" (db AS Psqlite3, zDbName AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_txn_state LIB "libsqlite3" ALIAS "sqlite3_txn_state" (arg1 AS Psqlite3, zSchema AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_next_stmt LIB "libsqlite3" ALIAS "sqlite3_next_stmt" (pDb AS Psqlite3, pStmt AS Psqlite3_stmt) AS Psqlite3_stmt
-DECLARE FUNCTION sqlite3_commit_hook LIB "libsqlite3" ALIAS "sqlite3_commit_hook" (arg1 AS Psqlite3, arg2 AS POINTER, arg3 AS POINTER) AS POINTER
-DECLARE FUNCTION sqlite3_rollback_hook LIB "libsqlite3" ALIAS "sqlite3_rollback_hook" (arg1 AS Psqlite3, arg2 AS POINTER, arg3 AS POINTER) AS POINTER
-DECLARE FUNCTION sqlite3_autovacuum_pages LIB "libsqlite3" ALIAS "sqlite3_autovacuum_pages" (db AS Psqlite3, arg2 AS POINTER, arg3 AS POINTER, arg4 AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_update_hook LIB "libsqlite3" ALIAS "sqlite3_update_hook" (arg1 AS Psqlite3, arg2 AS POINTER, arg3 AS POINTER) AS POINTER
-DECLARE FUNCTION sqlite3_enable_shared_cache LIB "libsqlite3" ALIAS "sqlite3_enable_shared_cache" (arg1 AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_release_memory LIB "libsqlite3" ALIAS "sqlite3_release_memory" (arg1 AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_db_release_memory LIB "libsqlite3" ALIAS "sqlite3_db_release_memory" (arg1 AS Psqlite3) AS INTEGER
-DECLARE FUNCTION sqlite3_soft_heap_limit64 LIB "libsqlite3" ALIAS "sqlite3_soft_heap_limit64" (N AS INT64) AS INT64
-DECLARE FUNCTION sqlite3_hard_heap_limit64 LIB "libsqlite3" ALIAS "sqlite3_hard_heap_limit64" (N AS INT64) AS INT64
-DECLARE SUB      sqlite3_soft_heap_limit LIB "libsqlite3" ALIAS "sqlite3_soft_heap_limit" (N AS INTEGER)
-DECLARE FUNCTION sqlite3_table_column_metadata LIB "libsqlite3" ALIAS "sqlite3_table_column_metadata" (db AS Psqlite3, zDbName AS POINTER, zTableName AS POINTER, zColumnName AS POINTER, pzDataType AS POINTER, pzCollSeq AS POINTER, pNotNull AS POINTER, pPrimaryKey AS POINTER, pAutoinc AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_load_extension LIB "libsqlite3" ALIAS "sqlite3_load_extension" (db AS Psqlite3, zFile AS POINTER, zProc AS POINTER, pzErrMsg AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_enable_load_extension LIB "libsqlite3" ALIAS "sqlite3_enable_load_extension" (db AS Psqlite3, onoff AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_auto_extension LIB "libsqlite3" ALIAS "sqlite3_auto_extension" (xEntryPoint AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_cancel_auto_extension LIB "libsqlite3" ALIAS "sqlite3_cancel_auto_extension" (xEntryPoint AS POINTER) AS INTEGER
-DECLARE SUB      sqlite3_reset_auto_extension LIB "libsqlite3" ALIAS "sqlite3_reset_auto_extension" ()
-DECLARE FUNCTION sqlite3_create_module LIB "libsqlite3" ALIAS "sqlite3_create_module" (db AS Psqlite3, zName AS POINTER, p AS Psqlite3_module, pClientData AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_create_module_v2 LIB "libsqlite3" ALIAS "sqlite3_create_module_v2" (db AS Psqlite3, zName AS POINTER, p AS Psqlite3_module, pClientData AS POINTER, xDestroy AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_drop_modules LIB "libsqlite3" ALIAS "sqlite3_drop_modules" (db AS Psqlite3, azKeep AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_declare_vtab LIB "libsqlite3" ALIAS "sqlite3_declare_vtab" (arg1 AS Psqlite3, zSQL AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_overload_function LIB "libsqlite3" ALIAS "sqlite3_overload_function" (arg1 AS Psqlite3, zFuncName AS POINTER, nArg AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_blob_open LIB "libsqlite3" ALIAS "sqlite3_blob_open" (arg1 AS Psqlite3, zDb AS POINTER, zTable AS POINTER, zColumn AS POINTER, iRow AS INT64, flags AS INTEGER, ppBlob AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_blob_reopen LIB "libsqlite3" ALIAS "sqlite3_blob_reopen" (arg1 AS Psqlite3_blob, arg2 AS INT64) AS INTEGER
-DECLARE FUNCTION sqlite3_blob_close LIB "libsqlite3" ALIAS "sqlite3_blob_close" (arg1 AS Psqlite3_blob) AS INTEGER
-DECLARE FUNCTION sqlite3_blob_bytes LIB "libsqlite3" ALIAS "sqlite3_blob_bytes" (arg1 AS Psqlite3_blob) AS INTEGER
-DECLARE FUNCTION sqlite3_blob_read LIB "libsqlite3" ALIAS "sqlite3_blob_read" (arg1 AS Psqlite3_blob, Z AS POINTER, N AS INTEGER, iOffset AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_blob_write LIB "libsqlite3" ALIAS "sqlite3_blob_write" (arg1 AS Psqlite3_blob, z AS POINTER, n AS INTEGER, iOffset AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_vfs_find LIB "libsqlite3" ALIAS "sqlite3_vfs_find" (zVfsName AS POINTER) AS Psqlite3_vfs
-DECLARE FUNCTION sqlite3_vfs_register LIB "libsqlite3" ALIAS "sqlite3_vfs_register" (arg1 AS Psqlite3_vfs, makeDflt AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_vfs_unregister LIB "libsqlite3" ALIAS "sqlite3_vfs_unregister" (arg1 AS Psqlite3_vfs) AS INTEGER
-DECLARE FUNCTION sqlite3_mutex_alloc LIB "libsqlite3" ALIAS "sqlite3_mutex_alloc" (arg1 AS INTEGER) AS Psqlite3_mutex
-DECLARE SUB      sqlite3_mutex_free LIB "libsqlite3" ALIAS "sqlite3_mutex_free" (arg1 AS Psqlite3_mutex)
-DECLARE SUB      sqlite3_mutex_enter LIB "libsqlite3" ALIAS "sqlite3_mutex_enter" (arg1 AS Psqlite3_mutex)
-DECLARE FUNCTION sqlite3_mutex_try LIB "libsqlite3" ALIAS "sqlite3_mutex_try" (arg1 AS Psqlite3_mutex) AS INTEGER
-DECLARE SUB      sqlite3_mutex_leave LIB "libsqlite3" ALIAS "sqlite3_mutex_leave" (arg1 AS Psqlite3_mutex)
-DECLARE FUNCTION sqlite3_mutex_held LIB "libsqlite3" ALIAS "sqlite3_mutex_held" (arg1 AS Psqlite3_mutex) AS INTEGER
-DECLARE FUNCTION sqlite3_mutex_notheld LIB "libsqlite3" ALIAS "sqlite3_mutex_notheld" (arg1 AS Psqlite3_mutex) AS INTEGER
-DECLARE FUNCTION sqlite3_db_mutex LIB "libsqlite3" ALIAS "sqlite3_db_mutex" (arg1 AS Psqlite3) AS Psqlite3_mutex
-DECLARE FUNCTION sqlite3_file_control LIB "libsqlite3" ALIAS "sqlite3_file_control" (arg1 AS Psqlite3, zDbName AS POINTER, op AS INTEGER, arg4 AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_test_control LIB "libsqlite3" ALIAS "sqlite3_test_control" (op AS INTEGER) AS INTEGER  ' varargs — call via wrapper
-DECLARE FUNCTION sqlite3_keyword_count LIB "libsqlite3" ALIAS "sqlite3_keyword_count" () AS INTEGER
-DECLARE FUNCTION sqlite3_keyword_name LIB "libsqlite3" ALIAS "sqlite3_keyword_name" (arg1 AS INTEGER, arg2 AS POINTER, arg3 AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_keyword_check LIB "libsqlite3" ALIAS "sqlite3_keyword_check" (arg1 AS POINTER, arg2 AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_str_new LIB "libsqlite3" ALIAS "sqlite3_str_new" (arg1 AS Psqlite3) AS Psqlite3_str
-DECLARE FUNCTION sqlite3_str_finish LIB "libsqlite3" ALIAS "sqlite3_str_finish" (arg1 AS Psqlite3_str) AS POINTER
-DECLARE SUB      sqlite3_str_appendf LIB "libsqlite3" ALIAS "sqlite3_str_appendf" (arg1 AS Psqlite3_str, zFormat AS POINTER)  ' varargs — call via wrapper
-DECLARE SUB      sqlite3_str_vappendf LIB "libsqlite3" ALIAS "sqlite3_str_vappendf" (arg1 AS Psqlite3_str, zFormat AS POINTER, arg3 AS POINTER)
-DECLARE SUB      sqlite3_str_append LIB "libsqlite3" ALIAS "sqlite3_str_append" (arg1 AS Psqlite3_str, zIn AS POINTER, N AS INTEGER)
-DECLARE SUB      sqlite3_str_appendall LIB "libsqlite3" ALIAS "sqlite3_str_appendall" (arg1 AS Psqlite3_str, zIn AS POINTER)
-DECLARE SUB      sqlite3_str_appendchar LIB "libsqlite3" ALIAS "sqlite3_str_appendchar" (arg1 AS Psqlite3_str, N AS INTEGER, C AS BYTE)
-DECLARE SUB      sqlite3_str_reset LIB "libsqlite3" ALIAS "sqlite3_str_reset" (arg1 AS Psqlite3_str)
-DECLARE FUNCTION sqlite3_str_errcode LIB "libsqlite3" ALIAS "sqlite3_str_errcode" (arg1 AS Psqlite3_str) AS INTEGER
-DECLARE FUNCTION sqlite3_str_length LIB "libsqlite3" ALIAS "sqlite3_str_length" (arg1 AS Psqlite3_str) AS INTEGER
-DECLARE FUNCTION sqlite3_str_value LIB "libsqlite3" ALIAS "sqlite3_str_value" (arg1 AS Psqlite3_str) AS POINTER
-DECLARE FUNCTION sqlite3_status LIB "libsqlite3" ALIAS "sqlite3_status" (op AS INTEGER, pCurrent AS POINTER, pHighwater AS POINTER, resetFlag AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_status64 LIB "libsqlite3" ALIAS "sqlite3_status64" (op AS INTEGER, pCurrent AS POINTER, pHighwater AS POINTER, resetFlag AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_db_status LIB "libsqlite3" ALIAS "sqlite3_db_status" (arg1 AS Psqlite3, op AS INTEGER, pCur AS POINTER, pHiwtr AS POINTER, resetFlg AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_stmt_status LIB "libsqlite3" ALIAS "sqlite3_stmt_status" (arg1 AS Psqlite3_stmt, op AS INTEGER, resetFlg AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_backup_init LIB "libsqlite3" ALIAS "sqlite3_backup_init" (pDest AS Psqlite3, zDestName AS POINTER, pSource AS Psqlite3, zSourceName AS POINTER) AS Psqlite3_backup
-DECLARE FUNCTION sqlite3_backup_step LIB "libsqlite3" ALIAS "sqlite3_backup_step" (p AS Psqlite3_backup, nPage AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_backup_finish LIB "libsqlite3" ALIAS "sqlite3_backup_finish" (p AS Psqlite3_backup) AS INTEGER
-DECLARE FUNCTION sqlite3_backup_remaining LIB "libsqlite3" ALIAS "sqlite3_backup_remaining" (p AS Psqlite3_backup) AS INTEGER
-DECLARE FUNCTION sqlite3_backup_pagecount LIB "libsqlite3" ALIAS "sqlite3_backup_pagecount" (p AS Psqlite3_backup) AS INTEGER
-DECLARE FUNCTION sqlite3_unlock_notify LIB "libsqlite3" ALIAS "sqlite3_unlock_notify" (pBlocked AS Psqlite3, xNotify AS POINTER, pNotifyArg AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_stricmp LIB "libsqlite3" ALIAS "sqlite3_stricmp" (arg1 AS POINTER, arg2 AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_strnicmp LIB "libsqlite3" ALIAS "sqlite3_strnicmp" (arg1 AS POINTER, arg2 AS POINTER, arg3 AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_strglob LIB "libsqlite3" ALIAS "sqlite3_strglob" (zGlob AS POINTER, zStr AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_strlike LIB "libsqlite3" ALIAS "sqlite3_strlike" (zGlob AS POINTER, zStr AS POINTER, cEsc AS DWORD) AS INTEGER
-DECLARE SUB      sqlite3_log LIB "libsqlite3" ALIAS "sqlite3_log" (iErrCode AS INTEGER, zFormat AS POINTER)  ' varargs — call via wrapper
-DECLARE FUNCTION sqlite3_wal_hook LIB "libsqlite3" ALIAS "sqlite3_wal_hook" (arg1 AS Psqlite3, arg2 AS POINTER, arg3 AS POINTER) AS POINTER
-DECLARE FUNCTION sqlite3_wal_autocheckpoint LIB "libsqlite3" ALIAS "sqlite3_wal_autocheckpoint" (db AS Psqlite3, N AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_wal_checkpoint LIB "libsqlite3" ALIAS "sqlite3_wal_checkpoint" (db AS Psqlite3, zDb AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_wal_checkpoint_v2 LIB "libsqlite3" ALIAS "sqlite3_wal_checkpoint_v2" (db AS Psqlite3, zDb AS POINTER, eMode AS INTEGER, pnLog AS POINTER, pnCkpt AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_vtab_config LIB "libsqlite3" ALIAS "sqlite3_vtab_config" (arg1 AS Psqlite3, op AS INTEGER) AS INTEGER  ' varargs — call via wrapper
-DECLARE FUNCTION sqlite3_vtab_on_conflict LIB "libsqlite3" ALIAS "sqlite3_vtab_on_conflict" (arg1 AS Psqlite3) AS INTEGER
-DECLARE FUNCTION sqlite3_vtab_nochange LIB "libsqlite3" ALIAS "sqlite3_vtab_nochange" (arg1 AS Psqlite3_context) AS INTEGER
-DECLARE FUNCTION sqlite3_vtab_collation LIB "libsqlite3" ALIAS "sqlite3_vtab_collation" (arg1 AS Psqlite3_index_info, arg2 AS INTEGER) AS POINTER
-DECLARE FUNCTION sqlite3_vtab_distinct LIB "libsqlite3" ALIAS "sqlite3_vtab_distinct" (arg1 AS Psqlite3_index_info) AS INTEGER
-DECLARE FUNCTION sqlite3_vtab_in LIB "libsqlite3" ALIAS "sqlite3_vtab_in" (arg1 AS Psqlite3_index_info, iCons AS INTEGER, bHandle AS INTEGER) AS INTEGER
-DECLARE FUNCTION sqlite3_vtab_in_first LIB "libsqlite3" ALIAS "sqlite3_vtab_in_first" (pVal AS Psqlite3_value, ppOut AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_vtab_in_next LIB "libsqlite3" ALIAS "sqlite3_vtab_in_next" (pVal AS Psqlite3_value, ppOut AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_vtab_rhs_value LIB "libsqlite3" ALIAS "sqlite3_vtab_rhs_value" (arg1 AS Psqlite3_index_info, arg2 AS INTEGER, ppVal AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_stmt_scanstatus LIB "libsqlite3" ALIAS "sqlite3_stmt_scanstatus" (pStmt AS Psqlite3_stmt, idx AS INTEGER, iScanStatusOp AS INTEGER, pOut AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_stmt_scanstatus_v2 LIB "libsqlite3" ALIAS "sqlite3_stmt_scanstatus_v2" (pStmt AS Psqlite3_stmt, idx AS INTEGER, iScanStatusOp AS INTEGER, flags AS INTEGER, pOut AS POINTER) AS INTEGER
-DECLARE SUB      sqlite3_stmt_scanstatus_reset LIB "libsqlite3" ALIAS "sqlite3_stmt_scanstatus_reset" (arg1 AS Psqlite3_stmt)
-DECLARE FUNCTION sqlite3_db_cacheflush LIB "libsqlite3" ALIAS "sqlite3_db_cacheflush" (arg1 AS Psqlite3) AS INTEGER
-DECLARE FUNCTION sqlite3_system_errno LIB "libsqlite3" ALIAS "sqlite3_system_errno" (arg1 AS Psqlite3) AS INTEGER
-DECLARE FUNCTION sqlite3_snapshot_get LIB "libsqlite3" ALIAS "sqlite3_snapshot_get" (db AS Psqlite3, zSchema AS POINTER, ppSnapshot AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_snapshot_open LIB "libsqlite3" ALIAS "sqlite3_snapshot_open" (db AS Psqlite3, zSchema AS POINTER, pSnapshot AS Psqlite3_snapshot) AS INTEGER
-DECLARE SUB      sqlite3_snapshot_free LIB "libsqlite3" ALIAS "sqlite3_snapshot_free" (arg1 AS Psqlite3_snapshot)
-DECLARE FUNCTION sqlite3_snapshot_cmp LIB "libsqlite3" ALIAS "sqlite3_snapshot_cmp" (p1 AS Psqlite3_snapshot, p2 AS Psqlite3_snapshot) AS INTEGER
-DECLARE FUNCTION sqlite3_snapshot_recover LIB "libsqlite3" ALIAS "sqlite3_snapshot_recover" (db AS Psqlite3, zDb AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_serialize LIB "libsqlite3" ALIAS "sqlite3_serialize" (db AS Psqlite3, zSchema AS POINTER, piSize AS POINTER, mFlags AS DWORD) AS POINTER
-DECLARE FUNCTION sqlite3_deserialize LIB "libsqlite3" ALIAS "sqlite3_deserialize" (db AS Psqlite3, zSchema AS POINTER, pData AS POINTER, szDb AS INT64, szBuf AS INT64, mFlags AS DWORD) AS INTEGER
-DECLARE FUNCTION sqlite3_rtree_geometry_callback LIB "libsqlite3" ALIAS "sqlite3_rtree_geometry_callback" (db AS Psqlite3, zGeom AS POINTER, xGeom AS POINTER, pContext AS POINTER) AS INTEGER
-DECLARE FUNCTION sqlite3_rtree_query_callback LIB "libsqlite3" ALIAS "sqlite3_rtree_query_callback" (db AS Psqlite3, zQueryFunc AS POINTER, xQueryFunc AS POINTER, pContext AS POINTER, xDestructor AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_libversion LIB "sqlite3" ALIAS "sqlite3_libversion" () AS POINTER
+DECLARE FUNCTION sqlite3_sourceid LIB "sqlite3" ALIAS "sqlite3_sourceid" () AS POINTER
+DECLARE FUNCTION sqlite3_libversion_number LIB "sqlite3" ALIAS "sqlite3_libversion_number" () AS INTEGER
+DECLARE FUNCTION sqlite3_compileoption_used LIB "sqlite3" ALIAS "sqlite3_compileoption_used" (zOptName AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_compileoption_get LIB "sqlite3" ALIAS "sqlite3_compileoption_get" (N AS INTEGER) AS POINTER
+DECLARE FUNCTION sqlite3_threadsafe LIB "sqlite3" ALIAS "sqlite3_threadsafe" () AS INTEGER
+DECLARE FUNCTION sqlite3_close LIB "sqlite3" ALIAS "sqlite3_close" (arg1 AS Psqlite3) AS INTEGER
+DECLARE FUNCTION sqlite3_close_v2 LIB "sqlite3" ALIAS "sqlite3_close_v2" (arg1 AS Psqlite3) AS INTEGER
+DECLARE FUNCTION sqlite3_exec LIB "sqlite3" ALIAS "sqlite3_exec" (arg1 AS Psqlite3, sql AS POINTER, callback AS POINTER, arg4 AS POINTER, errmsg AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_initialize LIB "sqlite3" ALIAS "sqlite3_initialize" () AS INTEGER
+DECLARE FUNCTION sqlite3_shutdown LIB "sqlite3" ALIAS "sqlite3_shutdown" () AS INTEGER
+DECLARE FUNCTION sqlite3_os_init LIB "sqlite3" ALIAS "sqlite3_os_init" () AS INTEGER
+DECLARE FUNCTION sqlite3_os_end LIB "sqlite3" ALIAS "sqlite3_os_end" () AS INTEGER
+DECLARE FUNCTION sqlite3_config LIB "sqlite3" ALIAS "sqlite3_config" (arg1 AS INTEGER) AS INTEGER  ' varargs — call via wrapper
+DECLARE FUNCTION sqlite3_db_config LIB "sqlite3" ALIAS "sqlite3_db_config" (arg1 AS Psqlite3, op AS INTEGER) AS INTEGER  ' varargs — call via wrapper
+DECLARE FUNCTION sqlite3_extended_result_codes LIB "sqlite3" ALIAS "sqlite3_extended_result_codes" (arg1 AS Psqlite3, onoff AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_last_insert_rowid LIB "sqlite3" ALIAS "sqlite3_last_insert_rowid" (arg1 AS Psqlite3) AS INT64
+DECLARE SUB      sqlite3_set_last_insert_rowid LIB "sqlite3" ALIAS "sqlite3_set_last_insert_rowid" (arg1 AS Psqlite3, arg2 AS INT64)
+DECLARE FUNCTION sqlite3_changes LIB "sqlite3" ALIAS "sqlite3_changes" (arg1 AS Psqlite3) AS INTEGER
+DECLARE FUNCTION sqlite3_changes64 LIB "sqlite3" ALIAS "sqlite3_changes64" (arg1 AS Psqlite3) AS INT64
+DECLARE FUNCTION sqlite3_total_changes LIB "sqlite3" ALIAS "sqlite3_total_changes" (arg1 AS Psqlite3) AS INTEGER
+DECLARE FUNCTION sqlite3_total_changes64 LIB "sqlite3" ALIAS "sqlite3_total_changes64" (arg1 AS Psqlite3) AS INT64
+DECLARE SUB      sqlite3_interrupt LIB "sqlite3" ALIAS "sqlite3_interrupt" (arg1 AS Psqlite3)
+DECLARE FUNCTION sqlite3_is_interrupted LIB "sqlite3" ALIAS "sqlite3_is_interrupted" (arg1 AS Psqlite3) AS INTEGER
+DECLARE FUNCTION sqlite3_complete LIB "sqlite3" ALIAS "sqlite3_complete" (sql AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_complete16 LIB "sqlite3" ALIAS "sqlite3_complete16" (sql AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_busy_handler LIB "sqlite3" ALIAS "sqlite3_busy_handler" (arg1 AS Psqlite3, arg2 AS POINTER, arg3 AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_busy_timeout LIB "sqlite3" ALIAS "sqlite3_busy_timeout" (arg1 AS Psqlite3, ms AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_get_table LIB "sqlite3" ALIAS "sqlite3_get_table" (db AS Psqlite3, zSql AS POINTER, pazResult AS POINTER, pnRow AS POINTER, pnColumn AS POINTER, pzErrmsg AS POINTER) AS INTEGER
+DECLARE SUB      sqlite3_free_table LIB "sqlite3" ALIAS "sqlite3_free_table" (result AS POINTER)
+DECLARE FUNCTION sqlite3_mprintf LIB "sqlite3" ALIAS "sqlite3_mprintf" (arg1 AS POINTER) AS POINTER  ' varargs — call via wrapper
+DECLARE FUNCTION sqlite3_vmprintf LIB "sqlite3" ALIAS "sqlite3_vmprintf" (arg1 AS POINTER, arg2 AS POINTER) AS POINTER
+DECLARE FUNCTION sqlite3_snprintf LIB "sqlite3" ALIAS "sqlite3_snprintf" (arg1 AS INTEGER, arg2 AS POINTER, arg3 AS POINTER) AS POINTER  ' varargs — call via wrapper
+DECLARE FUNCTION sqlite3_vsnprintf LIB "sqlite3" ALIAS "sqlite3_vsnprintf" (arg1 AS INTEGER, arg2 AS POINTER, arg3 AS POINTER, arg4 AS POINTER) AS POINTER
+DECLARE FUNCTION sqlite3_malloc LIB "sqlite3" ALIAS "sqlite3_malloc" (arg1 AS INTEGER) AS POINTER
+DECLARE FUNCTION sqlite3_malloc64 LIB "sqlite3" ALIAS "sqlite3_malloc64" (arg1 AS UINT64) AS POINTER
+DECLARE FUNCTION sqlite3_realloc LIB "sqlite3" ALIAS "sqlite3_realloc" (arg1 AS POINTER, arg2 AS INTEGER) AS POINTER
+DECLARE FUNCTION sqlite3_realloc64 LIB "sqlite3" ALIAS "sqlite3_realloc64" (arg1 AS POINTER, arg2 AS UINT64) AS POINTER
+DECLARE SUB      sqlite3_free LIB "sqlite3" ALIAS "sqlite3_free" (arg1 AS POINTER)
+DECLARE FUNCTION sqlite3_msize LIB "sqlite3" ALIAS "sqlite3_msize" (arg1 AS POINTER) AS UINT64
+DECLARE FUNCTION sqlite3_memory_used LIB "sqlite3" ALIAS "sqlite3_memory_used" () AS INT64
+DECLARE FUNCTION sqlite3_memory_highwater LIB "sqlite3" ALIAS "sqlite3_memory_highwater" (resetFlag AS INTEGER) AS INT64
+DECLARE SUB      sqlite3_randomness LIB "sqlite3" ALIAS "sqlite3_randomness" (N AS INTEGER, P AS POINTER)
+DECLARE FUNCTION sqlite3_set_authorizer LIB "sqlite3" ALIAS "sqlite3_set_authorizer" (arg1 AS Psqlite3, xAuth AS POINTER, pUserData AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_trace LIB "sqlite3" ALIAS "sqlite3_trace" (arg1 AS Psqlite3, xTrace AS POINTER, arg3 AS POINTER) AS POINTER
+DECLARE FUNCTION sqlite3_profile LIB "sqlite3" ALIAS "sqlite3_profile" (arg1 AS Psqlite3, xProfile AS POINTER, arg3 AS POINTER) AS POINTER
+DECLARE FUNCTION sqlite3_trace_v2 LIB "sqlite3" ALIAS "sqlite3_trace_v2" (arg1 AS Psqlite3, uMask AS DWORD, xCallback AS POINTER, pCtx AS POINTER) AS INTEGER
+DECLARE SUB      sqlite3_progress_handler LIB "sqlite3" ALIAS "sqlite3_progress_handler" (arg1 AS Psqlite3, arg2 AS INTEGER, arg3 AS POINTER, arg4 AS POINTER)
+DECLARE FUNCTION sqlite3_open LIB "sqlite3" ALIAS "sqlite3_open" (filename AS POINTER, ppDb AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_open16 LIB "sqlite3" ALIAS "sqlite3_open16" (filename AS POINTER, ppDb AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_open_v2 LIB "sqlite3" ALIAS "sqlite3_open_v2" (filename AS POINTER, ppDb AS POINTER, flags AS INTEGER, zVfs AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_uri_parameter LIB "sqlite3" ALIAS "sqlite3_uri_parameter" (z AS POINTER, zParam AS POINTER) AS POINTER
+DECLARE FUNCTION sqlite3_uri_boolean LIB "sqlite3" ALIAS "sqlite3_uri_boolean" (z AS POINTER, zParam AS POINTER, bDefault AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_uri_int64 LIB "sqlite3" ALIAS "sqlite3_uri_int64" (arg1 AS POINTER, arg2 AS POINTER, arg3 AS INT64) AS INT64
+DECLARE FUNCTION sqlite3_uri_key LIB "sqlite3" ALIAS "sqlite3_uri_key" (z AS POINTER, N AS INTEGER) AS POINTER
+DECLARE FUNCTION sqlite3_filename_database LIB "sqlite3" ALIAS "sqlite3_filename_database" (arg1 AS POINTER) AS POINTER
+DECLARE FUNCTION sqlite3_filename_journal LIB "sqlite3" ALIAS "sqlite3_filename_journal" (arg1 AS POINTER) AS POINTER
+DECLARE FUNCTION sqlite3_filename_wal LIB "sqlite3" ALIAS "sqlite3_filename_wal" (arg1 AS POINTER) AS POINTER
+DECLARE FUNCTION sqlite3_database_file_object LIB "sqlite3" ALIAS "sqlite3_database_file_object" (arg1 AS POINTER) AS Psqlite3_file
+DECLARE FUNCTION sqlite3_create_filename LIB "sqlite3" ALIAS "sqlite3_create_filename" (zDatabase AS POINTER, zJournal AS POINTER, zWal AS POINTER, nParam AS INTEGER, azParam AS POINTER) AS POINTER
+DECLARE SUB      sqlite3_free_filename LIB "sqlite3" ALIAS "sqlite3_free_filename" (arg1 AS POINTER)
+DECLARE FUNCTION sqlite3_errcode LIB "sqlite3" ALIAS "sqlite3_errcode" (db AS Psqlite3) AS INTEGER
+DECLARE FUNCTION sqlite3_extended_errcode LIB "sqlite3" ALIAS "sqlite3_extended_errcode" (db AS Psqlite3) AS INTEGER
+DECLARE FUNCTION sqlite3_errmsg LIB "sqlite3" ALIAS "sqlite3_errmsg" (arg1 AS Psqlite3) AS POINTER
+DECLARE FUNCTION sqlite3_errmsg16 LIB "sqlite3" ALIAS "sqlite3_errmsg16" (arg1 AS Psqlite3) AS POINTER
+DECLARE FUNCTION sqlite3_errstr LIB "sqlite3" ALIAS "sqlite3_errstr" (arg1 AS INTEGER) AS POINTER
+DECLARE FUNCTION sqlite3_error_offset LIB "sqlite3" ALIAS "sqlite3_error_offset" (db AS Psqlite3) AS INTEGER
+DECLARE FUNCTION sqlite3_limit LIB "sqlite3" ALIAS "sqlite3_limit" (arg1 AS Psqlite3, id AS INTEGER, newVal AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_prepare LIB "sqlite3" ALIAS "sqlite3_prepare" (db AS Psqlite3, zSql AS POINTER, nByte AS INTEGER, ppStmt AS POINTER, pzTail AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_prepare_v2 LIB "sqlite3" ALIAS "sqlite3_prepare_v2" (db AS Psqlite3, zSql AS POINTER, nByte AS INTEGER, ppStmt AS POINTER, pzTail AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_prepare_v3 LIB "sqlite3" ALIAS "sqlite3_prepare_v3" (db AS Psqlite3, zSql AS POINTER, nByte AS INTEGER, prepFlags AS DWORD, ppStmt AS POINTER, pzTail AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_prepare16 LIB "sqlite3" ALIAS "sqlite3_prepare16" (db AS Psqlite3, zSql AS POINTER, nByte AS INTEGER, ppStmt AS POINTER, pzTail AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_prepare16_v2 LIB "sqlite3" ALIAS "sqlite3_prepare16_v2" (db AS Psqlite3, zSql AS POINTER, nByte AS INTEGER, ppStmt AS POINTER, pzTail AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_prepare16_v3 LIB "sqlite3" ALIAS "sqlite3_prepare16_v3" (db AS Psqlite3, zSql AS POINTER, nByte AS INTEGER, prepFlags AS DWORD, ppStmt AS POINTER, pzTail AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_sql LIB "sqlite3" ALIAS "sqlite3_sql" (pStmt AS Psqlite3_stmt) AS POINTER
+DECLARE FUNCTION sqlite3_expanded_sql LIB "sqlite3" ALIAS "sqlite3_expanded_sql" (pStmt AS Psqlite3_stmt) AS POINTER
+DECLARE FUNCTION sqlite3_stmt_readonly LIB "sqlite3" ALIAS "sqlite3_stmt_readonly" (pStmt AS Psqlite3_stmt) AS INTEGER
+DECLARE FUNCTION sqlite3_stmt_isexplain LIB "sqlite3" ALIAS "sqlite3_stmt_isexplain" (pStmt AS Psqlite3_stmt) AS INTEGER
+DECLARE FUNCTION sqlite3_stmt_explain LIB "sqlite3" ALIAS "sqlite3_stmt_explain" (pStmt AS Psqlite3_stmt, eMode AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_stmt_busy LIB "sqlite3" ALIAS "sqlite3_stmt_busy" (arg1 AS Psqlite3_stmt) AS INTEGER
+DECLARE FUNCTION sqlite3_bind_blob LIB "sqlite3" ALIAS "sqlite3_bind_blob" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, arg3 AS POINTER, n AS INTEGER, arg5 AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_bind_blob64 LIB "sqlite3" ALIAS "sqlite3_bind_blob64" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, arg3 AS POINTER, arg4 AS UINT64, arg5 AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_bind_double LIB "sqlite3" ALIAS "sqlite3_bind_double" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, arg3 AS DOUBLE) AS INTEGER
+DECLARE FUNCTION sqlite3_bind_int LIB "sqlite3" ALIAS "sqlite3_bind_int" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, arg3 AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_bind_int64 LIB "sqlite3" ALIAS "sqlite3_bind_int64" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, arg3 AS INT64) AS INTEGER
+DECLARE FUNCTION sqlite3_bind_null LIB "sqlite3" ALIAS "sqlite3_bind_null" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_bind_text LIB "sqlite3" ALIAS "sqlite3_bind_text" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, arg3 AS POINTER, arg4 AS INTEGER, arg5 AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_bind_text16 LIB "sqlite3" ALIAS "sqlite3_bind_text16" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, arg3 AS POINTER, arg4 AS INTEGER, arg5 AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_bind_text64 LIB "sqlite3" ALIAS "sqlite3_bind_text64" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, arg3 AS POINTER, arg4 AS UINT64, arg5 AS POINTER, encoding AS BYTE) AS INTEGER
+DECLARE FUNCTION sqlite3_bind_value LIB "sqlite3" ALIAS "sqlite3_bind_value" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, arg3 AS Psqlite3_value) AS INTEGER
+DECLARE FUNCTION sqlite3_bind_pointer LIB "sqlite3" ALIAS "sqlite3_bind_pointer" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, arg3 AS POINTER, arg4 AS POINTER, arg5 AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_bind_zeroblob LIB "sqlite3" ALIAS "sqlite3_bind_zeroblob" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, n AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_bind_zeroblob64 LIB "sqlite3" ALIAS "sqlite3_bind_zeroblob64" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER, arg3 AS UINT64) AS INTEGER
+DECLARE FUNCTION sqlite3_bind_parameter_count LIB "sqlite3" ALIAS "sqlite3_bind_parameter_count" (arg1 AS Psqlite3_stmt) AS INTEGER
+DECLARE FUNCTION sqlite3_bind_parameter_name LIB "sqlite3" ALIAS "sqlite3_bind_parameter_name" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER) AS POINTER
+DECLARE FUNCTION sqlite3_bind_parameter_index LIB "sqlite3" ALIAS "sqlite3_bind_parameter_index" (arg1 AS Psqlite3_stmt, zName AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_clear_bindings LIB "sqlite3" ALIAS "sqlite3_clear_bindings" (arg1 AS Psqlite3_stmt) AS INTEGER
+DECLARE FUNCTION sqlite3_column_count LIB "sqlite3" ALIAS "sqlite3_column_count" (pStmt AS Psqlite3_stmt) AS INTEGER
+DECLARE FUNCTION sqlite3_column_name LIB "sqlite3" ALIAS "sqlite3_column_name" (arg1 AS Psqlite3_stmt, N AS INTEGER) AS POINTER
+DECLARE FUNCTION sqlite3_column_name16 LIB "sqlite3" ALIAS "sqlite3_column_name16" (arg1 AS Psqlite3_stmt, N AS INTEGER) AS POINTER
+DECLARE FUNCTION sqlite3_column_database_name LIB "sqlite3" ALIAS "sqlite3_column_database_name" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER) AS POINTER
+DECLARE FUNCTION sqlite3_column_database_name16 LIB "sqlite3" ALIAS "sqlite3_column_database_name16" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER) AS POINTER
+DECLARE FUNCTION sqlite3_column_table_name LIB "sqlite3" ALIAS "sqlite3_column_table_name" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER) AS POINTER
+DECLARE FUNCTION sqlite3_column_table_name16 LIB "sqlite3" ALIAS "sqlite3_column_table_name16" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER) AS POINTER
+DECLARE FUNCTION sqlite3_column_origin_name LIB "sqlite3" ALIAS "sqlite3_column_origin_name" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER) AS POINTER
+DECLARE FUNCTION sqlite3_column_origin_name16 LIB "sqlite3" ALIAS "sqlite3_column_origin_name16" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER) AS POINTER
+DECLARE FUNCTION sqlite3_column_decltype LIB "sqlite3" ALIAS "sqlite3_column_decltype" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER) AS POINTER
+DECLARE FUNCTION sqlite3_column_decltype16 LIB "sqlite3" ALIAS "sqlite3_column_decltype16" (arg1 AS Psqlite3_stmt, arg2 AS INTEGER) AS POINTER
+DECLARE FUNCTION sqlite3_step LIB "sqlite3" ALIAS "sqlite3_step" (arg1 AS Psqlite3_stmt) AS INTEGER
+DECLARE FUNCTION sqlite3_data_count LIB "sqlite3" ALIAS "sqlite3_data_count" (pStmt AS Psqlite3_stmt) AS INTEGER
+DECLARE FUNCTION sqlite3_column_blob LIB "sqlite3" ALIAS "sqlite3_column_blob" (arg1 AS Psqlite3_stmt, iCol AS INTEGER) AS POINTER
+DECLARE FUNCTION sqlite3_column_double LIB "sqlite3" ALIAS "sqlite3_column_double" (arg1 AS Psqlite3_stmt, iCol AS INTEGER) AS DOUBLE
+DECLARE FUNCTION sqlite3_column_int LIB "sqlite3" ALIAS "sqlite3_column_int" (arg1 AS Psqlite3_stmt, iCol AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_column_int64 LIB "sqlite3" ALIAS "sqlite3_column_int64" (arg1 AS Psqlite3_stmt, iCol AS INTEGER) AS INT64
+DECLARE FUNCTION sqlite3_column_text LIB "sqlite3" ALIAS "sqlite3_column_text" (arg1 AS Psqlite3_stmt, iCol AS INTEGER) AS POINTER
+DECLARE FUNCTION sqlite3_column_text16 LIB "sqlite3" ALIAS "sqlite3_column_text16" (arg1 AS Psqlite3_stmt, iCol AS INTEGER) AS POINTER
+DECLARE FUNCTION sqlite3_column_value LIB "sqlite3" ALIAS "sqlite3_column_value" (arg1 AS Psqlite3_stmt, iCol AS INTEGER) AS Psqlite3_value
+DECLARE FUNCTION sqlite3_column_bytes LIB "sqlite3" ALIAS "sqlite3_column_bytes" (arg1 AS Psqlite3_stmt, iCol AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_column_bytes16 LIB "sqlite3" ALIAS "sqlite3_column_bytes16" (arg1 AS Psqlite3_stmt, iCol AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_column_type LIB "sqlite3" ALIAS "sqlite3_column_type" (arg1 AS Psqlite3_stmt, iCol AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_finalize LIB "sqlite3" ALIAS "sqlite3_finalize" (pStmt AS Psqlite3_stmt) AS INTEGER
+DECLARE FUNCTION sqlite3_reset LIB "sqlite3" ALIAS "sqlite3_reset" (pStmt AS Psqlite3_stmt) AS INTEGER
+DECLARE FUNCTION sqlite3_create_function LIB "sqlite3" ALIAS "sqlite3_create_function" (db AS Psqlite3, zFunctionName AS POINTER, nArg AS INTEGER, eTextRep AS INTEGER, pApp AS POINTER, xFunc AS POINTER, xStep AS POINTER, xFinal AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_create_function16 LIB "sqlite3" ALIAS "sqlite3_create_function16" (db AS Psqlite3, zFunctionName AS POINTER, nArg AS INTEGER, eTextRep AS INTEGER, pApp AS POINTER, xFunc AS POINTER, xStep AS POINTER, xFinal AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_create_function_v2 LIB "sqlite3" ALIAS "sqlite3_create_function_v2" (db AS Psqlite3, zFunctionName AS POINTER, nArg AS INTEGER, eTextRep AS INTEGER, pApp AS POINTER, xFunc AS POINTER, xStep AS POINTER, xFinal AS POINTER, xDestroy AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_create_window_function LIB "sqlite3" ALIAS "sqlite3_create_window_function" (db AS Psqlite3, zFunctionName AS POINTER, nArg AS INTEGER, eTextRep AS INTEGER, pApp AS POINTER, xStep AS POINTER, xFinal AS POINTER, xValue AS POINTER, xInverse AS POINTER, xDestroy AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_aggregate_count LIB "sqlite3" ALIAS "sqlite3_aggregate_count" (arg1 AS Psqlite3_context) AS INTEGER
+DECLARE FUNCTION sqlite3_expired LIB "sqlite3" ALIAS "sqlite3_expired" (arg1 AS Psqlite3_stmt) AS INTEGER
+DECLARE FUNCTION sqlite3_transfer_bindings LIB "sqlite3" ALIAS "sqlite3_transfer_bindings" (arg1 AS Psqlite3_stmt, arg2 AS Psqlite3_stmt) AS INTEGER
+DECLARE FUNCTION sqlite3_global_recover LIB "sqlite3" ALIAS "sqlite3_global_recover" () AS INTEGER
+DECLARE SUB      sqlite3_thread_cleanup LIB "sqlite3" ALIAS "sqlite3_thread_cleanup" ()
+DECLARE FUNCTION sqlite3_memory_alarm LIB "sqlite3" ALIAS "sqlite3_memory_alarm" (arg1 AS POINTER, arg2 AS POINTER, arg3 AS INT64) AS INTEGER
+DECLARE FUNCTION sqlite3_value_blob LIB "sqlite3" ALIAS "sqlite3_value_blob" (arg1 AS Psqlite3_value) AS POINTER
+DECLARE FUNCTION sqlite3_value_double LIB "sqlite3" ALIAS "sqlite3_value_double" (arg1 AS Psqlite3_value) AS DOUBLE
+DECLARE FUNCTION sqlite3_value_int LIB "sqlite3" ALIAS "sqlite3_value_int" (arg1 AS Psqlite3_value) AS INTEGER
+DECLARE FUNCTION sqlite3_value_int64 LIB "sqlite3" ALIAS "sqlite3_value_int64" (arg1 AS Psqlite3_value) AS INT64
+DECLARE FUNCTION sqlite3_value_pointer LIB "sqlite3" ALIAS "sqlite3_value_pointer" (arg1 AS Psqlite3_value, arg2 AS POINTER) AS POINTER
+DECLARE FUNCTION sqlite3_value_text LIB "sqlite3" ALIAS "sqlite3_value_text" (arg1 AS Psqlite3_value) AS POINTER
+DECLARE FUNCTION sqlite3_value_text16 LIB "sqlite3" ALIAS "sqlite3_value_text16" (arg1 AS Psqlite3_value) AS POINTER
+DECLARE FUNCTION sqlite3_value_text16le LIB "sqlite3" ALIAS "sqlite3_value_text16le" (arg1 AS Psqlite3_value) AS POINTER
+DECLARE FUNCTION sqlite3_value_text16be LIB "sqlite3" ALIAS "sqlite3_value_text16be" (arg1 AS Psqlite3_value) AS POINTER
+DECLARE FUNCTION sqlite3_value_bytes LIB "sqlite3" ALIAS "sqlite3_value_bytes" (arg1 AS Psqlite3_value) AS INTEGER
+DECLARE FUNCTION sqlite3_value_bytes16 LIB "sqlite3" ALIAS "sqlite3_value_bytes16" (arg1 AS Psqlite3_value) AS INTEGER
+DECLARE FUNCTION sqlite3_value_type LIB "sqlite3" ALIAS "sqlite3_value_type" (arg1 AS Psqlite3_value) AS INTEGER
+DECLARE FUNCTION sqlite3_value_numeric_type LIB "sqlite3" ALIAS "sqlite3_value_numeric_type" (arg1 AS Psqlite3_value) AS INTEGER
+DECLARE FUNCTION sqlite3_value_nochange LIB "sqlite3" ALIAS "sqlite3_value_nochange" (arg1 AS Psqlite3_value) AS INTEGER
+DECLARE FUNCTION sqlite3_value_frombind LIB "sqlite3" ALIAS "sqlite3_value_frombind" (arg1 AS Psqlite3_value) AS INTEGER
+DECLARE FUNCTION sqlite3_value_encoding LIB "sqlite3" ALIAS "sqlite3_value_encoding" (arg1 AS Psqlite3_value) AS INTEGER
+DECLARE FUNCTION sqlite3_value_subtype LIB "sqlite3" ALIAS "sqlite3_value_subtype" (arg1 AS Psqlite3_value) AS DWORD
+DECLARE FUNCTION sqlite3_value_dup LIB "sqlite3" ALIAS "sqlite3_value_dup" (arg1 AS Psqlite3_value) AS Psqlite3_value
+DECLARE SUB      sqlite3_value_free LIB "sqlite3" ALIAS "sqlite3_value_free" (arg1 AS Psqlite3_value)
+DECLARE FUNCTION sqlite3_aggregate_context LIB "sqlite3" ALIAS "sqlite3_aggregate_context" (arg1 AS Psqlite3_context, nBytes AS INTEGER) AS POINTER
+DECLARE FUNCTION sqlite3_user_data LIB "sqlite3" ALIAS "sqlite3_user_data" (arg1 AS Psqlite3_context) AS POINTER
+DECLARE FUNCTION sqlite3_context_db_handle LIB "sqlite3" ALIAS "sqlite3_context_db_handle" (arg1 AS Psqlite3_context) AS Psqlite3
+DECLARE FUNCTION sqlite3_get_auxdata LIB "sqlite3" ALIAS "sqlite3_get_auxdata" (arg1 AS Psqlite3_context, N AS INTEGER) AS POINTER
+DECLARE SUB      sqlite3_set_auxdata LIB "sqlite3" ALIAS "sqlite3_set_auxdata" (arg1 AS Psqlite3_context, N AS INTEGER, arg3 AS POINTER, arg4 AS POINTER)
+DECLARE FUNCTION sqlite3_get_clientdata LIB "sqlite3" ALIAS "sqlite3_get_clientdata" (arg1 AS Psqlite3, arg2 AS POINTER) AS POINTER
+DECLARE FUNCTION sqlite3_set_clientdata LIB "sqlite3" ALIAS "sqlite3_set_clientdata" (arg1 AS Psqlite3, arg2 AS POINTER, arg3 AS POINTER, arg4 AS POINTER) AS INTEGER
+DECLARE SUB      sqlite3_result_blob LIB "sqlite3" ALIAS "sqlite3_result_blob" (arg1 AS Psqlite3_context, arg2 AS POINTER, arg3 AS INTEGER, arg4 AS POINTER)
+DECLARE SUB      sqlite3_result_blob64 LIB "sqlite3" ALIAS "sqlite3_result_blob64" (arg1 AS Psqlite3_context, arg2 AS POINTER, arg3 AS UINT64, arg4 AS POINTER)
+DECLARE SUB      sqlite3_result_double LIB "sqlite3" ALIAS "sqlite3_result_double" (arg1 AS Psqlite3_context, arg2 AS DOUBLE)
+DECLARE SUB      sqlite3_result_error LIB "sqlite3" ALIAS "sqlite3_result_error" (arg1 AS Psqlite3_context, arg2 AS POINTER, arg3 AS INTEGER)
+DECLARE SUB      sqlite3_result_error16 LIB "sqlite3" ALIAS "sqlite3_result_error16" (arg1 AS Psqlite3_context, arg2 AS POINTER, arg3 AS INTEGER)
+DECLARE SUB      sqlite3_result_error_toobig LIB "sqlite3" ALIAS "sqlite3_result_error_toobig" (arg1 AS Psqlite3_context)
+DECLARE SUB      sqlite3_result_error_nomem LIB "sqlite3" ALIAS "sqlite3_result_error_nomem" (arg1 AS Psqlite3_context)
+DECLARE SUB      sqlite3_result_error_code LIB "sqlite3" ALIAS "sqlite3_result_error_code" (arg1 AS Psqlite3_context, arg2 AS INTEGER)
+DECLARE SUB      sqlite3_result_int LIB "sqlite3" ALIAS "sqlite3_result_int" (arg1 AS Psqlite3_context, arg2 AS INTEGER)
+DECLARE SUB      sqlite3_result_int64 LIB "sqlite3" ALIAS "sqlite3_result_int64" (arg1 AS Psqlite3_context, arg2 AS INT64)
+DECLARE SUB      sqlite3_result_null LIB "sqlite3" ALIAS "sqlite3_result_null" (arg1 AS Psqlite3_context)
+DECLARE SUB      sqlite3_result_text LIB "sqlite3" ALIAS "sqlite3_result_text" (arg1 AS Psqlite3_context, arg2 AS POINTER, arg3 AS INTEGER, arg4 AS POINTER)
+DECLARE SUB      sqlite3_result_text64 LIB "sqlite3" ALIAS "sqlite3_result_text64" (arg1 AS Psqlite3_context, arg2 AS POINTER, arg3 AS UINT64, arg4 AS POINTER, encoding AS BYTE)
+DECLARE SUB      sqlite3_result_text16 LIB "sqlite3" ALIAS "sqlite3_result_text16" (arg1 AS Psqlite3_context, arg2 AS POINTER, arg3 AS INTEGER, arg4 AS POINTER)
+DECLARE SUB      sqlite3_result_text16le LIB "sqlite3" ALIAS "sqlite3_result_text16le" (arg1 AS Psqlite3_context, arg2 AS POINTER, arg3 AS INTEGER, arg4 AS POINTER)
+DECLARE SUB      sqlite3_result_text16be LIB "sqlite3" ALIAS "sqlite3_result_text16be" (arg1 AS Psqlite3_context, arg2 AS POINTER, arg3 AS INTEGER, arg4 AS POINTER)
+DECLARE SUB      sqlite3_result_value LIB "sqlite3" ALIAS "sqlite3_result_value" (arg1 AS Psqlite3_context, arg2 AS Psqlite3_value)
+DECLARE SUB      sqlite3_result_pointer LIB "sqlite3" ALIAS "sqlite3_result_pointer" (arg1 AS Psqlite3_context, arg2 AS POINTER, arg3 AS POINTER, arg4 AS POINTER)
+DECLARE SUB      sqlite3_result_zeroblob LIB "sqlite3" ALIAS "sqlite3_result_zeroblob" (arg1 AS Psqlite3_context, n AS INTEGER)
+DECLARE FUNCTION sqlite3_result_zeroblob64 LIB "sqlite3" ALIAS "sqlite3_result_zeroblob64" (arg1 AS Psqlite3_context, n AS UINT64) AS INTEGER
+DECLARE SUB      sqlite3_result_subtype LIB "sqlite3" ALIAS "sqlite3_result_subtype" (arg1 AS Psqlite3_context, arg2 AS DWORD)
+DECLARE FUNCTION sqlite3_create_collation LIB "sqlite3" ALIAS "sqlite3_create_collation" (arg1 AS Psqlite3, zName AS POINTER, eTextRep AS INTEGER, pArg AS POINTER, xCompare AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_create_collation_v2 LIB "sqlite3" ALIAS "sqlite3_create_collation_v2" (arg1 AS Psqlite3, zName AS POINTER, eTextRep AS INTEGER, pArg AS POINTER, xCompare AS POINTER, xDestroy AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_create_collation16 LIB "sqlite3" ALIAS "sqlite3_create_collation16" (arg1 AS Psqlite3, zName AS POINTER, eTextRep AS INTEGER, pArg AS POINTER, xCompare AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_collation_needed LIB "sqlite3" ALIAS "sqlite3_collation_needed" (arg1 AS Psqlite3, arg2 AS POINTER, arg3 AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_collation_needed16 LIB "sqlite3" ALIAS "sqlite3_collation_needed16" (arg1 AS Psqlite3, arg2 AS POINTER, arg3 AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_sleep LIB "sqlite3" ALIAS "sqlite3_sleep" (arg1 AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_win32_set_directory LIB "sqlite3" ALIAS "sqlite3_win32_set_directory" (type_ AS UINT64, zValue AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_win32_set_directory8 LIB "sqlite3" ALIAS "sqlite3_win32_set_directory8" (type_ AS UINT64, zValue AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_win32_set_directory16 LIB "sqlite3" ALIAS "sqlite3_win32_set_directory16" (type_ AS UINT64, zValue AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_get_autocommit LIB "sqlite3" ALIAS "sqlite3_get_autocommit" (arg1 AS Psqlite3) AS INTEGER
+DECLARE FUNCTION sqlite3_db_handle LIB "sqlite3" ALIAS "sqlite3_db_handle" (arg1 AS Psqlite3_stmt) AS Psqlite3
+DECLARE FUNCTION sqlite3_db_name LIB "sqlite3" ALIAS "sqlite3_db_name" (db AS Psqlite3, N AS INTEGER) AS POINTER
+DECLARE FUNCTION sqlite3_db_filename LIB "sqlite3" ALIAS "sqlite3_db_filename" (db AS Psqlite3, zDbName AS POINTER) AS POINTER
+DECLARE FUNCTION sqlite3_db_readonly LIB "sqlite3" ALIAS "sqlite3_db_readonly" (db AS Psqlite3, zDbName AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_txn_state LIB "sqlite3" ALIAS "sqlite3_txn_state" (arg1 AS Psqlite3, zSchema AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_next_stmt LIB "sqlite3" ALIAS "sqlite3_next_stmt" (pDb AS Psqlite3, pStmt AS Psqlite3_stmt) AS Psqlite3_stmt
+DECLARE FUNCTION sqlite3_commit_hook LIB "sqlite3" ALIAS "sqlite3_commit_hook" (arg1 AS Psqlite3, arg2 AS POINTER, arg3 AS POINTER) AS POINTER
+DECLARE FUNCTION sqlite3_rollback_hook LIB "sqlite3" ALIAS "sqlite3_rollback_hook" (arg1 AS Psqlite3, arg2 AS POINTER, arg3 AS POINTER) AS POINTER
+DECLARE FUNCTION sqlite3_autovacuum_pages LIB "sqlite3" ALIAS "sqlite3_autovacuum_pages" (db AS Psqlite3, arg2 AS POINTER, arg3 AS POINTER, arg4 AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_update_hook LIB "sqlite3" ALIAS "sqlite3_update_hook" (arg1 AS Psqlite3, arg2 AS POINTER, arg3 AS POINTER) AS POINTER
+DECLARE FUNCTION sqlite3_enable_shared_cache LIB "sqlite3" ALIAS "sqlite3_enable_shared_cache" (arg1 AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_release_memory LIB "sqlite3" ALIAS "sqlite3_release_memory" (arg1 AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_db_release_memory LIB "sqlite3" ALIAS "sqlite3_db_release_memory" (arg1 AS Psqlite3) AS INTEGER
+DECLARE FUNCTION sqlite3_soft_heap_limit64 LIB "sqlite3" ALIAS "sqlite3_soft_heap_limit64" (N AS INT64) AS INT64
+DECLARE FUNCTION sqlite3_hard_heap_limit64 LIB "sqlite3" ALIAS "sqlite3_hard_heap_limit64" (N AS INT64) AS INT64
+DECLARE SUB      sqlite3_soft_heap_limit LIB "sqlite3" ALIAS "sqlite3_soft_heap_limit" (N AS INTEGER)
+DECLARE FUNCTION sqlite3_table_column_metadata LIB "sqlite3" ALIAS "sqlite3_table_column_metadata" (db AS Psqlite3, zDbName AS POINTER, zTableName AS POINTER, zColumnName AS POINTER, pzDataType AS POINTER, pzCollSeq AS POINTER, pNotNull AS POINTER, pPrimaryKey AS POINTER, pAutoinc AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_load_extension LIB "sqlite3" ALIAS "sqlite3_load_extension" (db AS Psqlite3, zFile AS POINTER, zProc AS POINTER, pzErrMsg AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_enable_load_extension LIB "sqlite3" ALIAS "sqlite3_enable_load_extension" (db AS Psqlite3, onoff AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_auto_extension LIB "sqlite3" ALIAS "sqlite3_auto_extension" (xEntryPoint AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_cancel_auto_extension LIB "sqlite3" ALIAS "sqlite3_cancel_auto_extension" (xEntryPoint AS POINTER) AS INTEGER
+DECLARE SUB      sqlite3_reset_auto_extension LIB "sqlite3" ALIAS "sqlite3_reset_auto_extension" ()
+DECLARE FUNCTION sqlite3_create_module LIB "sqlite3" ALIAS "sqlite3_create_module" (db AS Psqlite3, zName AS POINTER, p AS Psqlite3_module, pClientData AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_create_module_v2 LIB "sqlite3" ALIAS "sqlite3_create_module_v2" (db AS Psqlite3, zName AS POINTER, p AS Psqlite3_module, pClientData AS POINTER, xDestroy AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_drop_modules LIB "sqlite3" ALIAS "sqlite3_drop_modules" (db AS Psqlite3, azKeep AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_declare_vtab LIB "sqlite3" ALIAS "sqlite3_declare_vtab" (arg1 AS Psqlite3, zSQL AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_overload_function LIB "sqlite3" ALIAS "sqlite3_overload_function" (arg1 AS Psqlite3, zFuncName AS POINTER, nArg AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_blob_open LIB "sqlite3" ALIAS "sqlite3_blob_open" (arg1 AS Psqlite3, zDb AS POINTER, zTable AS POINTER, zColumn AS POINTER, iRow AS INT64, flags AS INTEGER, ppBlob AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_blob_reopen LIB "sqlite3" ALIAS "sqlite3_blob_reopen" (arg1 AS Psqlite3_blob, arg2 AS INT64) AS INTEGER
+DECLARE FUNCTION sqlite3_blob_close LIB "sqlite3" ALIAS "sqlite3_blob_close" (arg1 AS Psqlite3_blob) AS INTEGER
+DECLARE FUNCTION sqlite3_blob_bytes LIB "sqlite3" ALIAS "sqlite3_blob_bytes" (arg1 AS Psqlite3_blob) AS INTEGER
+DECLARE FUNCTION sqlite3_blob_read LIB "sqlite3" ALIAS "sqlite3_blob_read" (arg1 AS Psqlite3_blob, Z AS POINTER, N AS INTEGER, iOffset AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_blob_write LIB "sqlite3" ALIAS "sqlite3_blob_write" (arg1 AS Psqlite3_blob, z AS POINTER, n AS INTEGER, iOffset AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_vfs_find LIB "sqlite3" ALIAS "sqlite3_vfs_find" (zVfsName AS POINTER) AS Psqlite3_vfs
+DECLARE FUNCTION sqlite3_vfs_register LIB "sqlite3" ALIAS "sqlite3_vfs_register" (arg1 AS Psqlite3_vfs, makeDflt AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_vfs_unregister LIB "sqlite3" ALIAS "sqlite3_vfs_unregister" (arg1 AS Psqlite3_vfs) AS INTEGER
+DECLARE FUNCTION sqlite3_mutex_alloc LIB "sqlite3" ALIAS "sqlite3_mutex_alloc" (arg1 AS INTEGER) AS Psqlite3_mutex
+DECLARE SUB      sqlite3_mutex_free LIB "sqlite3" ALIAS "sqlite3_mutex_free" (arg1 AS Psqlite3_mutex)
+DECLARE SUB      sqlite3_mutex_enter LIB "sqlite3" ALIAS "sqlite3_mutex_enter" (arg1 AS Psqlite3_mutex)
+DECLARE FUNCTION sqlite3_mutex_try LIB "sqlite3" ALIAS "sqlite3_mutex_try" (arg1 AS Psqlite3_mutex) AS INTEGER
+DECLARE SUB      sqlite3_mutex_leave LIB "sqlite3" ALIAS "sqlite3_mutex_leave" (arg1 AS Psqlite3_mutex)
+DECLARE FUNCTION sqlite3_mutex_held LIB "sqlite3" ALIAS "sqlite3_mutex_held" (arg1 AS Psqlite3_mutex) AS INTEGER
+DECLARE FUNCTION sqlite3_mutex_notheld LIB "sqlite3" ALIAS "sqlite3_mutex_notheld" (arg1 AS Psqlite3_mutex) AS INTEGER
+DECLARE FUNCTION sqlite3_db_mutex LIB "sqlite3" ALIAS "sqlite3_db_mutex" (arg1 AS Psqlite3) AS Psqlite3_mutex
+DECLARE FUNCTION sqlite3_file_control LIB "sqlite3" ALIAS "sqlite3_file_control" (arg1 AS Psqlite3, zDbName AS POINTER, op AS INTEGER, arg4 AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_test_control LIB "sqlite3" ALIAS "sqlite3_test_control" (op AS INTEGER) AS INTEGER  ' varargs — call via wrapper
+DECLARE FUNCTION sqlite3_keyword_count LIB "sqlite3" ALIAS "sqlite3_keyword_count" () AS INTEGER
+DECLARE FUNCTION sqlite3_keyword_name LIB "sqlite3" ALIAS "sqlite3_keyword_name" (arg1 AS INTEGER, arg2 AS POINTER, arg3 AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_keyword_check LIB "sqlite3" ALIAS "sqlite3_keyword_check" (arg1 AS POINTER, arg2 AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_str_new LIB "sqlite3" ALIAS "sqlite3_str_new" (arg1 AS Psqlite3) AS Psqlite3_str
+DECLARE FUNCTION sqlite3_str_finish LIB "sqlite3" ALIAS "sqlite3_str_finish" (arg1 AS Psqlite3_str) AS POINTER
+DECLARE SUB      sqlite3_str_appendf LIB "sqlite3" ALIAS "sqlite3_str_appendf" (arg1 AS Psqlite3_str, zFormat AS POINTER)  ' varargs — call via wrapper
+DECLARE SUB      sqlite3_str_vappendf LIB "sqlite3" ALIAS "sqlite3_str_vappendf" (arg1 AS Psqlite3_str, zFormat AS POINTER, arg3 AS POINTER)
+DECLARE SUB      sqlite3_str_append LIB "sqlite3" ALIAS "sqlite3_str_append" (arg1 AS Psqlite3_str, zIn AS POINTER, N AS INTEGER)
+DECLARE SUB      sqlite3_str_appendall LIB "sqlite3" ALIAS "sqlite3_str_appendall" (arg1 AS Psqlite3_str, zIn AS POINTER)
+DECLARE SUB      sqlite3_str_appendchar LIB "sqlite3" ALIAS "sqlite3_str_appendchar" (arg1 AS Psqlite3_str, N AS INTEGER, C AS BYTE)
+DECLARE SUB      sqlite3_str_reset LIB "sqlite3" ALIAS "sqlite3_str_reset" (arg1 AS Psqlite3_str)
+DECLARE FUNCTION sqlite3_str_errcode LIB "sqlite3" ALIAS "sqlite3_str_errcode" (arg1 AS Psqlite3_str) AS INTEGER
+DECLARE FUNCTION sqlite3_str_length LIB "sqlite3" ALIAS "sqlite3_str_length" (arg1 AS Psqlite3_str) AS INTEGER
+DECLARE FUNCTION sqlite3_str_value LIB "sqlite3" ALIAS "sqlite3_str_value" (arg1 AS Psqlite3_str) AS POINTER
+DECLARE FUNCTION sqlite3_status LIB "sqlite3" ALIAS "sqlite3_status" (op AS INTEGER, pCurrent AS POINTER, pHighwater AS POINTER, resetFlag AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_status64 LIB "sqlite3" ALIAS "sqlite3_status64" (op AS INTEGER, pCurrent AS POINTER, pHighwater AS POINTER, resetFlag AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_db_status LIB "sqlite3" ALIAS "sqlite3_db_status" (arg1 AS Psqlite3, op AS INTEGER, pCur AS POINTER, pHiwtr AS POINTER, resetFlg AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_stmt_status LIB "sqlite3" ALIAS "sqlite3_stmt_status" (arg1 AS Psqlite3_stmt, op AS INTEGER, resetFlg AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_backup_init LIB "sqlite3" ALIAS "sqlite3_backup_init" (pDest AS Psqlite3, zDestName AS POINTER, pSource AS Psqlite3, zSourceName AS POINTER) AS Psqlite3_backup
+DECLARE FUNCTION sqlite3_backup_step LIB "sqlite3" ALIAS "sqlite3_backup_step" (p AS Psqlite3_backup, nPage AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_backup_finish LIB "sqlite3" ALIAS "sqlite3_backup_finish" (p AS Psqlite3_backup) AS INTEGER
+DECLARE FUNCTION sqlite3_backup_remaining LIB "sqlite3" ALIAS "sqlite3_backup_remaining" (p AS Psqlite3_backup) AS INTEGER
+DECLARE FUNCTION sqlite3_backup_pagecount LIB "sqlite3" ALIAS "sqlite3_backup_pagecount" (p AS Psqlite3_backup) AS INTEGER
+DECLARE FUNCTION sqlite3_unlock_notify LIB "sqlite3" ALIAS "sqlite3_unlock_notify" (pBlocked AS Psqlite3, xNotify AS POINTER, pNotifyArg AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_stricmp LIB "sqlite3" ALIAS "sqlite3_stricmp" (arg1 AS POINTER, arg2 AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_strnicmp LIB "sqlite3" ALIAS "sqlite3_strnicmp" (arg1 AS POINTER, arg2 AS POINTER, arg3 AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_strglob LIB "sqlite3" ALIAS "sqlite3_strglob" (zGlob AS POINTER, zStr AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_strlike LIB "sqlite3" ALIAS "sqlite3_strlike" (zGlob AS POINTER, zStr AS POINTER, cEsc AS DWORD) AS INTEGER
+DECLARE SUB      sqlite3_log LIB "sqlite3" ALIAS "sqlite3_log" (iErrCode AS INTEGER, zFormat AS POINTER)  ' varargs — call via wrapper
+DECLARE FUNCTION sqlite3_wal_hook LIB "sqlite3" ALIAS "sqlite3_wal_hook" (arg1 AS Psqlite3, arg2 AS POINTER, arg3 AS POINTER) AS POINTER
+DECLARE FUNCTION sqlite3_wal_autocheckpoint LIB "sqlite3" ALIAS "sqlite3_wal_autocheckpoint" (db AS Psqlite3, N AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_wal_checkpoint LIB "sqlite3" ALIAS "sqlite3_wal_checkpoint" (db AS Psqlite3, zDb AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_wal_checkpoint_v2 LIB "sqlite3" ALIAS "sqlite3_wal_checkpoint_v2" (db AS Psqlite3, zDb AS POINTER, eMode AS INTEGER, pnLog AS POINTER, pnCkpt AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_vtab_config LIB "sqlite3" ALIAS "sqlite3_vtab_config" (arg1 AS Psqlite3, op AS INTEGER) AS INTEGER  ' varargs — call via wrapper
+DECLARE FUNCTION sqlite3_vtab_on_conflict LIB "sqlite3" ALIAS "sqlite3_vtab_on_conflict" (arg1 AS Psqlite3) AS INTEGER
+DECLARE FUNCTION sqlite3_vtab_nochange LIB "sqlite3" ALIAS "sqlite3_vtab_nochange" (arg1 AS Psqlite3_context) AS INTEGER
+DECLARE FUNCTION sqlite3_vtab_collation LIB "sqlite3" ALIAS "sqlite3_vtab_collation" (arg1 AS Psqlite3_index_info, arg2 AS INTEGER) AS POINTER
+DECLARE FUNCTION sqlite3_vtab_distinct LIB "sqlite3" ALIAS "sqlite3_vtab_distinct" (arg1 AS Psqlite3_index_info) AS INTEGER
+DECLARE FUNCTION sqlite3_vtab_in LIB "sqlite3" ALIAS "sqlite3_vtab_in" (arg1 AS Psqlite3_index_info, iCons AS INTEGER, bHandle AS INTEGER) AS INTEGER
+DECLARE FUNCTION sqlite3_vtab_in_first LIB "sqlite3" ALIAS "sqlite3_vtab_in_first" (pVal AS Psqlite3_value, ppOut AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_vtab_in_next LIB "sqlite3" ALIAS "sqlite3_vtab_in_next" (pVal AS Psqlite3_value, ppOut AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_vtab_rhs_value LIB "sqlite3" ALIAS "sqlite3_vtab_rhs_value" (arg1 AS Psqlite3_index_info, arg2 AS INTEGER, ppVal AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_stmt_scanstatus LIB "sqlite3" ALIAS "sqlite3_stmt_scanstatus" (pStmt AS Psqlite3_stmt, idx AS INTEGER, iScanStatusOp AS INTEGER, pOut AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_stmt_scanstatus_v2 LIB "sqlite3" ALIAS "sqlite3_stmt_scanstatus_v2" (pStmt AS Psqlite3_stmt, idx AS INTEGER, iScanStatusOp AS INTEGER, flags AS INTEGER, pOut AS POINTER) AS INTEGER
+DECLARE SUB      sqlite3_stmt_scanstatus_reset LIB "sqlite3" ALIAS "sqlite3_stmt_scanstatus_reset" (arg1 AS Psqlite3_stmt)
+DECLARE FUNCTION sqlite3_db_cacheflush LIB "sqlite3" ALIAS "sqlite3_db_cacheflush" (arg1 AS Psqlite3) AS INTEGER
+DECLARE FUNCTION sqlite3_system_errno LIB "sqlite3" ALIAS "sqlite3_system_errno" (arg1 AS Psqlite3) AS INTEGER
+DECLARE FUNCTION sqlite3_snapshot_get LIB "sqlite3" ALIAS "sqlite3_snapshot_get" (db AS Psqlite3, zSchema AS POINTER, ppSnapshot AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_snapshot_open LIB "sqlite3" ALIAS "sqlite3_snapshot_open" (db AS Psqlite3, zSchema AS POINTER, pSnapshot AS Psqlite3_snapshot) AS INTEGER
+DECLARE SUB      sqlite3_snapshot_free LIB "sqlite3" ALIAS "sqlite3_snapshot_free" (arg1 AS Psqlite3_snapshot)
+DECLARE FUNCTION sqlite3_snapshot_cmp LIB "sqlite3" ALIAS "sqlite3_snapshot_cmp" (p1 AS Psqlite3_snapshot, p2 AS Psqlite3_snapshot) AS INTEGER
+DECLARE FUNCTION sqlite3_snapshot_recover LIB "sqlite3" ALIAS "sqlite3_snapshot_recover" (db AS Psqlite3, zDb AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_serialize LIB "sqlite3" ALIAS "sqlite3_serialize" (db AS Psqlite3, zSchema AS POINTER, piSize AS POINTER, mFlags AS DWORD) AS POINTER
+DECLARE FUNCTION sqlite3_deserialize LIB "sqlite3" ALIAS "sqlite3_deserialize" (db AS Psqlite3, zSchema AS POINTER, pData AS POINTER, szDb AS INT64, szBuf AS INT64, mFlags AS DWORD) AS INTEGER
+DECLARE FUNCTION sqlite3_rtree_geometry_callback LIB "sqlite3" ALIAS "sqlite3_rtree_geometry_callback" (db AS Psqlite3, zGeom AS POINTER, xGeom AS POINTER, pContext AS POINTER) AS INTEGER
+DECLARE FUNCTION sqlite3_rtree_query_callback LIB "sqlite3" ALIAS "sqlite3_rtree_query_callback" (db AS Psqlite3, zQueryFunc AS POINTER, xQueryFunc AS POINTER, pContext AS POINTER, xDestructor AS POINTER) AS INTEGER
