@@ -342,6 +342,13 @@ begin
           Result := 'POINTER'
         else if T.Pointee.Kind in [tkFunctionPointer, tkVaList] then
           Result := 'POINTER'
+        else if T.Pointee.Kind = tkPointer then
+          { Double-indirection (e.g. sqlite3**) can't be typed in
+            rqbasic: `TYPE PPFoo AS PFoo Ptr` forward-declares PFoo,
+            but the rapidq compiler requires the forward to land on a
+            `TYPE PFoo ... END TYPE` body — a `TYPE PFoo AS Foo Ptr`
+            alias doesn't satisfy. Collapse to POINTER. }
+          Result := 'POINTER'
         else if (T.Pointee.Kind = tkPrimitive)
                 and ((Trim(T.Pointee.Spelling) = 'char')
                      or (Trim(T.Pointee.Spelling) = 'const char')
@@ -563,6 +570,13 @@ begin
     Exit;
   end;
   if (Pos('(', D.Name) > 0) or (Pos(' ', D.Name) > 0) then Exit;
+  { Vacuous self-typedef (`typedef struct sqlite3 sqlite3;`) — don't
+    claim the name in FEmittedTypes so the matching StructDecl can
+    still emit. EmitTypedef would otherwise Exit early after the
+    name was already reserved, masking the real record body. }
+  if (D is TBindingTypedef)
+     and (LowerCase(MapType(TBindingTypedef(D).Aliased)) = LowerCase(D.Name)) then
+    Exit;
   if FEmittedTypes.IndexOf(D.Name) >= 0 then Exit;
   FEmittedTypes.Add(D.Name);
   if      D is TBindingRecord  then EmitRecord(TBindingRecord(D))
