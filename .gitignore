@@ -2,6 +2,7 @@ target/
 *.o
 *.ppu
 examples/gtk4/demo
+examples/gtk4/demo_rqbasic
 examples/vulkan/demo
 examples/blaise-vulkan/demo
 examples/blaise-gtk4/demo
