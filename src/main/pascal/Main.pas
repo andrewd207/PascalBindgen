@@ -3,7 +3,8 @@ program Main;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, bindgen.ir, bindgen.parser, bindgen.emit.fpc, bindgen.emit.blaise;
+  SysUtils, bindgen.ir, bindgen.parser, bindgen.emit.fpc, bindgen.emit.blaise,
+  bindgen.emit.rqbasic;
 
 const
   Version = '1.0.0';
@@ -32,7 +33,7 @@ end;
 procedure Usage;
 begin
   WriteLn('pascal_bindgen ', Version);
-  WriteLn('usage: pascal_bindgen [--fpc] --header <file.h> [--output <file.pas>]');
+  WriteLn('usage: pascal_bindgen [--fpc|--blaise|--rqbasic] --header <file.h> [--output <file.pas>]');
   WriteLn('                      [--unit-name <name>] [--library <name>]');
   WriteLn('                      [-- <clang args...>]');
   WriteLn('  With no dialect flag the parser dumps top-level decls for debugging.');
@@ -78,6 +79,7 @@ var
   U: TBindingUnit;
   FpcEmitter: TFpcEmitter;
   BlaiseEmitter: TBlaiseEmitter;
+  RqBasicEmitter: TRqBasicEmitter;
   Arg: string;
 begin
   HeaderPath := '';
@@ -124,6 +126,8 @@ begin
       Dialect := 'fpc'
     else if Arg = '--blaise' then
       Dialect := 'blaise'
+    else if Arg = '--rqbasic' then
+      Dialect := 'rqbasic'
     else if Arg = '--' then
       PastDD := True
     else
@@ -154,6 +158,17 @@ begin
         WriteAllText(OutputPath, BlaiseEmitter.Emit(U));
       finally
         BlaiseEmitter.Free;
+      end;
+    end
+    else if Dialect = 'rqbasic' then
+    begin
+      if UnitName = '' then UnitName := DeriveUnitName(OutputPath, HeaderPath);
+      RqBasicEmitter := TRqBasicEmitter.Create(UnitName, LibraryName);
+      try
+        if OutputPath = '' then OutputPath := '-';
+        WriteAllText(OutputPath, RqBasicEmitter.Emit(U));
+      finally
+        RqBasicEmitter.Free;
       end;
     end
     else
