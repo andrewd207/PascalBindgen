@@ -5,8 +5,6 @@ set -eu
 RAPIDQ=${RAPIDQ:-/tmp/rapidq}
 RQROOT=${RQROOT:-/home/andrew/Programming/GroupProjects/RapidQ-ll}
 
-export BLAISE_RTL="$RQROOT/rapidq/bootstrap/blaise_rtl_unit_source.a"
-
 HERE="$(cd "$(dirname "$0")" && pwd)"
 OUT="$HERE/demo_rqbasic"
 
@@ -18,6 +16,7 @@ cp "$HERE/demo_rqbasic.bas" /tmp/demo_rqbasic_opengl.bas
   --source /tmp/demo_rqbasic_opengl.bas \
   --output "$OUT" \
   --link GL \
+  --unit-path "$RQROOT/rapidq/runtime" \
   --unit-path "$RQROOT/rapidq/src/main/pascal" \
   --unit-path "$RQROOT/blaise/runtime/src/main/pascal" \
   --unit-path "$RQROOT/blaise/stdlib/src/main/pascal"
