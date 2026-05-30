@@ -82,9 +82,9 @@ implementation
 { Loose superset of rqbasic reserved tokens — collisions just get a
   '_' suffix, so over-listing is harmless. }
 const
-  RQBASIC_RESERVED: array[0..92] of string = (
+  RQBASIC_RESERVED: array[0..91] of string = (
     'alias','and','as','base','bind','byref','byval','call','case',
-    'class','color','const','constructor','create','declare','define',
+    'class','const','constructor','create','declare','define',
     'delete','dim','do','else','elseif','end','endif','eof','eol','eqv',
     'erase','event','exit','extends','for','function','functioni','get',
     'gosub','goto','if','ifdef','ifndef','imp','include','input','lib',
@@ -403,7 +403,11 @@ begin
             that rqbasic can't resolve at semantic-analysis time. }
           Result := 'POINTER'
         else
-          Result := Inner;
+          { Escape if the C name collides with a reserved word — the
+            matching TYPE block is emitted under EscapeIdent(Name),
+            so references have to follow the same rule (`Color` ->
+            `Color_`). }
+          Result := EscapeIdent(Inner);
       end;
     tkPrimitive:
       Result := MapPrimitive(T.Spelling, T.ByteSize);
@@ -658,11 +662,16 @@ begin
               typedefs, so we route through the record's stripped name
               if it's actually declared. That makes `GdkPixbuf*` map to
               `_GdkPixbuf` -> AliasPointer -> `P_GdkPixbuf` at the
-              pointer level. }
+              pointer level. Escape so reserved-word collisions
+              (raylib's `Color` -> `Color_`) carry through to call
+              sites. }
             Mapped := AT.Spelling;
             if Copy(Mapped, 1, 7) = 'struct ' then Delete(Mapped, 1, 7)
             else if Copy(Mapped, 1, 6) = 'union '  then Delete(Mapped, 1, 6);
-            if FDeclaredTypeNames.IndexOf(Mapped) < 0 then Mapped := '';
+            if FDeclaredTypeNames.IndexOf(Mapped) < 0 then
+              Mapped := ''
+            else
+              Mapped := EscapeIdent(Mapped);
           end;
         end;
     end;

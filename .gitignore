@@ -5,6 +5,7 @@ examples/gtk4/demo
 examples/gtk4/demo_rqbasic
 examples/sqlite/demo_rqbasic
 examples/opengl/demo_rqbasic
+examples/raylib/demo_rqbasic
 examples/**/*.ll
 examples/vulkan/demo
 examples/blaise-vulkan/demo
