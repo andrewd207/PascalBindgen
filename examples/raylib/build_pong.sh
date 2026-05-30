@@ -16,8 +16,7 @@ cp "$HERE/pong_rqbasic.bas"   /tmp/pong_rqbasic.bas
   --output "$OUT" \
   --link raylib \
   --unit-path "$RQROOT/rapidq/runtime" \
-  --unit-path "$RQROOT/rapidq/src/main/pascal" \
-  --unit-path "$RQROOT/blaise/runtime/src/main/pascal" \
-  --unit-path "$RQROOT/blaise/stdlib/src/main/pascal"
+  --unit-path "$RQROOT/rapidq/stdlib" \
+  --unit-path "$RQROOT/Rapidq/include"
 
 echo "built: $OUT"

@@ -16,8 +16,7 @@ cp "$HERE/demo_rqbasic.bas"    /tmp/demo_rqbasic_sqlite.bas
   --output "$OUT" \
   --link sqlite3 \
   --unit-path "$RQROOT/rapidq/runtime" \
-  --unit-path "$RQROOT/rapidq/src/main/pascal" \
-  --unit-path "$RQROOT/blaise/runtime/src/main/pascal" \
-  --unit-path "$RQROOT/blaise/stdlib/src/main/pascal"
+  --unit-path "$RQROOT/rapidq/stdlib" \
+  --unit-path "$RQROOT/Rapidq/include"
 
 echo "built: $OUT"
