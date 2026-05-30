@@ -73,6 +73,7 @@ var
   UnitName: string;
   LibraryName: string;
   Dialect: string;
+  PrefixTypes: Boolean;
   ExtraArgs: array of string;
   I: Integer;
   PastDD: Boolean;
@@ -87,6 +88,7 @@ begin
   UnitName := '';
   LibraryName := '';
   Dialect := '';
+  PrefixTypes := False;
   PastDD := False;
   SetLength(ExtraArgs, 0);
   I := 1;
@@ -128,6 +130,11 @@ begin
       Dialect := 'blaise'
     else if Arg = '--rqbasic' then
       Dialect := 'rqbasic'
+    { rqbasic-only: T-prefix every TYPE name so the type namespace
+      can't case-fold-collide with constants/functions. Pointer
+      aliases stay on the separate P<bare> track. }
+    else if Arg = '--prefix-types' then
+      PrefixTypes := True
     else if Arg = '--' then
       PastDD := True
     else
@@ -163,7 +170,7 @@ begin
     else if Dialect = 'rqbasic' then
     begin
       if UnitName = '' then UnitName := DeriveUnitName(OutputPath, HeaderPath);
-      RqBasicEmitter := TRqBasicEmitter.Create(UnitName, LibraryName);
+      RqBasicEmitter := TRqBasicEmitter.Create(UnitName, LibraryName, PrefixTypes);
       try
         if OutputPath = '' then OutputPath := '-';
         WriteAllText(OutputPath, RqBasicEmitter.Emit(U));

@@ -310,15 +310,15 @@ DECLARE FUNCTION glutBitmapWidth LIB "glut" ALIAS "glutBitmapWidth" (font AS POI
 DECLARE SUB      glutStrokeCharacter LIB "glut" ALIAS "glutStrokeCharacter" (font AS POINTER, character AS INTEGER)
 DECLARE FUNCTION glutStrokeWidth LIB "glut" ALIAS "glutStrokeWidth" (font AS POINTER, character AS INTEGER) AS INTEGER
 DECLARE FUNCTION glutStrokeWidthf LIB "glut" ALIAS "glutStrokeWidthf" (font AS POINTER, character AS INTEGER) AS SINGLE
-DECLARE FUNCTION glutBitmapLength LIB "glut" ALIAS "glutBitmapLength" (font AS POINTER, string_ AS POINTER) AS INTEGER
-DECLARE FUNCTION glutStrokeLength LIB "glut" ALIAS "glutStrokeLength" (font AS POINTER, string_ AS POINTER) AS INTEGER
-DECLARE FUNCTION glutStrokeLengthf LIB "glut" ALIAS "glutStrokeLengthf" (font AS POINTER, string_ AS POINTER) AS SINGLE
+DECLARE FUNCTION glutBitmapLength LIB "glut" ALIAS "glutBitmapLength" (font AS POINTER, _string AS POINTER) AS INTEGER
+DECLARE FUNCTION glutStrokeLength LIB "glut" ALIAS "glutStrokeLength" (font AS POINTER, _string AS POINTER) AS INTEGER
+DECLARE FUNCTION glutStrokeLengthf LIB "glut" ALIAS "glutStrokeLengthf" (font AS POINTER, _string AS POINTER) AS SINGLE
 DECLARE SUB      glutWireCube LIB "glut" ALIAS "glutWireCube" (size AS DOUBLE)
 DECLARE SUB      glutSolidCube LIB "glut" ALIAS "glutSolidCube" (size AS DOUBLE)
 DECLARE SUB      glutWireSphere LIB "glut" ALIAS "glutWireSphere" (radius AS DOUBLE, slices AS INTEGER, stacks AS INTEGER)
 DECLARE SUB      glutSolidSphere LIB "glut" ALIAS "glutSolidSphere" (radius AS DOUBLE, slices AS INTEGER, stacks AS INTEGER)
-DECLARE SUB      glutWireCone LIB "glut" ALIAS "glutWireCone" (base_ AS DOUBLE, height AS DOUBLE, slices AS INTEGER, stacks AS INTEGER)
-DECLARE SUB      glutSolidCone LIB "glut" ALIAS "glutSolidCone" (base_ AS DOUBLE, height AS DOUBLE, slices AS INTEGER, stacks AS INTEGER)
+DECLARE SUB      glutWireCone LIB "glut" ALIAS "glutWireCone" (_base AS DOUBLE, height AS DOUBLE, slices AS INTEGER, stacks AS INTEGER)
+DECLARE SUB      glutSolidCone LIB "glut" ALIAS "glutSolidCone" (_base AS DOUBLE, height AS DOUBLE, slices AS INTEGER, stacks AS INTEGER)
 DECLARE SUB      glutWireTorus LIB "glut" ALIAS "glutWireTorus" (innerRadius AS DOUBLE, outerRadius AS DOUBLE, sides AS INTEGER, rings AS INTEGER)
 DECLARE SUB      glutSolidTorus LIB "glut" ALIAS "glutSolidTorus" (innerRadius AS DOUBLE, outerRadius AS DOUBLE, sides AS INTEGER, rings AS INTEGER)
 DECLARE SUB      glutWireDodecahedron LIB "glut" ALIAS "glutWireDodecahedron" ()
@@ -331,7 +331,7 @@ DECLARE SUB      glutWireIcosahedron LIB "glut" ALIAS "glutWireIcosahedron" ()
 DECLARE SUB      glutSolidIcosahedron LIB "glut" ALIAS "glutSolidIcosahedron" ()
 DECLARE SUB      glutWireTeapot LIB "glut" ALIAS "glutWireTeapot" (size AS DOUBLE)
 DECLARE SUB      glutSolidTeapot LIB "glut" ALIAS "glutSolidTeapot" (size AS DOUBLE)
-DECLARE SUB      glutGameModeString LIB "glut" ALIAS "glutGameModeString" (string_ AS POINTER)
+DECLARE SUB      glutGameModeString LIB "glut" ALIAS "glutGameModeString" (_string AS POINTER)
 DECLARE FUNCTION glutEnterGameMode LIB "glut" ALIAS "glutEnterGameMode" () AS INTEGER
 DECLARE SUB      glutLeaveGameMode LIB "glut" ALIAS "glutLeaveGameMode" ()
 DECLARE FUNCTION glutGameModeGet LIB "glut" ALIAS "glutGameModeGet" (query AS DWORD) AS INTEGER
@@ -340,8 +340,8 @@ DECLARE SUB      glutSetupVideoResizing LIB "glut" ALIAS "glutSetupVideoResizing
 DECLARE SUB      glutStopVideoResizing LIB "glut" ALIAS "glutStopVideoResizing" ()
 DECLARE SUB      glutVideoResize LIB "glut" ALIAS "glutVideoResize" (x AS INTEGER, y AS INTEGER, width AS INTEGER, height AS INTEGER)
 DECLARE SUB      glutVideoPan LIB "glut" ALIAS "glutVideoPan" (x AS INTEGER, y AS INTEGER, width AS INTEGER, height AS INTEGER)
-DECLARE SUB      glutSetColor LIB "glut" ALIAS "glutSetColor" (color_ AS INTEGER, red AS SINGLE, green AS SINGLE, blue AS SINGLE)
-DECLARE FUNCTION glutGetColor LIB "glut" ALIAS "glutGetColor" (color_ AS INTEGER, component AS INTEGER) AS SINGLE
+DECLARE SUB      glutSetColor LIB "glut" ALIAS "glutSetColor" (color AS INTEGER, red AS SINGLE, green AS SINGLE, blue AS SINGLE)
+DECLARE FUNCTION glutGetColor LIB "glut" ALIAS "glutGetColor" (color AS INTEGER, component AS INTEGER) AS SINGLE
 DECLARE SUB      glutCopyColormap LIB "glut" ALIAS "glutCopyColormap" (window AS INTEGER)
 DECLARE SUB      glutIgnoreKeyRepeat LIB "glut" ALIAS "glutIgnoreKeyRepeat" (ignore AS INTEGER)
 DECLARE SUB      glutSetKeyRepeat LIB "glut" ALIAS "glutSetKeyRepeat" (repeatMode AS INTEGER)
@@ -367,8 +367,8 @@ DECLARE FUNCTION glutGetMenuData LIB "glut" ALIAS "glutGetMenuData" () AS POINTE
 DECLARE SUB      glutSetMenuData LIB "glut" ALIAS "glutSetMenuData" (data AS POINTER)
 DECLARE FUNCTION glutBitmapHeight LIB "glut" ALIAS "glutBitmapHeight" (font AS POINTER) AS INTEGER
 DECLARE FUNCTION glutStrokeHeight LIB "glut" ALIAS "glutStrokeHeight" (font AS POINTER) AS SINGLE
-DECLARE SUB      glutBitmapString LIB "glut" ALIAS "glutBitmapString" (font AS POINTER, string_ AS POINTER)
-DECLARE SUB      glutStrokeString LIB "glut" ALIAS "glutStrokeString" (font AS POINTER, string_ AS POINTER)
+DECLARE SUB      glutBitmapString LIB "glut" ALIAS "glutBitmapString" (font AS POINTER, _string AS POINTER)
+DECLARE SUB      glutStrokeString LIB "glut" ALIAS "glutStrokeString" (font AS POINTER, _string AS POINTER)
 DECLARE SUB      glutWireRhombicDodecahedron LIB "glut" ALIAS "glutWireRhombicDodecahedron" ()
 DECLARE SUB      glutSolidRhombicDodecahedron LIB "glut" ALIAS "glutSolidRhombicDodecahedron" ()
 DECLARE SUB      glutWireSierpinskiSponge LIB "glut" ALIAS "glutWireSierpinskiSponge" (num_levels AS INTEGER, offset AS DOUBLE(2), scale AS DOUBLE)

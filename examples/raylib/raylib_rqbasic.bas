@@ -210,9 +210,13 @@ TYPE Wave
   channels AS DWORD
   data AS POINTER
 END TYPE
+'opaque forward decl
 TYPE rAudioBuffer
+  _opaque AS BYTE
 END TYPE
+'opaque forward decl
 TYPE rAudioProcessor
+  _opaque AS BYTE
 END TYPE
 TYPE AudioStream
   buffer AS PrAudioBuffer
@@ -260,7 +264,7 @@ TYPE FilePathList
 END TYPE
 TYPE AutomationEvent
   frame AS DWORD
-  type_ AS DWORD
+  _type AS DWORD
   params AS INTEGER(3)
 END TYPE
 TYPE AutomationEventList
@@ -738,7 +742,7 @@ DECLARE SUB      SetAutomationEventList LIB "raylib" ALIAS "SetAutomationEventLi
 DECLARE SUB      SetAutomationEventBaseFrame LIB "raylib" ALIAS "SetAutomationEventBaseFrame" (frame AS INTEGER)
 DECLARE SUB      StartAutomationEventRecording LIB "raylib" ALIAS "StartAutomationEventRecording" ()
 DECLARE SUB      StopAutomationEventRecording LIB "raylib" ALIAS "StopAutomationEventRecording" ()
-DECLARE SUB      PlayAutomationEvent LIB "raylib" ALIAS "PlayAutomationEvent" (event_ AS AutomationEvent)
+DECLARE SUB      PlayAutomationEvent LIB "raylib" ALIAS "PlayAutomationEvent" (_event AS AutomationEvent)
 DECLARE FUNCTION IsKeyPressed LIB "raylib" ALIAS "IsKeyPressed" (key AS INTEGER) AS BYTE
 DECLARE FUNCTION IsKeyPressedRepeat LIB "raylib" ALIAS "IsKeyPressedRepeat" (key AS INTEGER) AS BYTE
 DECLARE FUNCTION IsKeyDown LIB "raylib" ALIAS "IsKeyDown" (key AS INTEGER) AS BYTE
@@ -866,7 +870,7 @@ DECLARE FUNCTION ExportImage LIB "raylib" ALIAS "ExportImage" (image AS Image, f
 DECLARE FUNCTION ExportImageToMemory LIB "raylib" ALIAS "ExportImageToMemory" (image AS Image, fileType AS POINTER, fileSize AS POINTER) AS POINTER
 DECLARE FUNCTION ExportImageAsCode LIB "raylib" ALIAS "ExportImageAsCode" (image AS Image, fileName AS POINTER) AS BYTE
 DECLARE FUNCTION GenImageColor LIB "raylib" ALIAS "GenImageColor" (width AS INTEGER, height AS INTEGER, color AS Color) AS Image
-DECLARE FUNCTION GenImageGradientLinear LIB "raylib" ALIAS "GenImageGradientLinear" (width AS INTEGER, height AS INTEGER, direction AS INTEGER, start AS Color, end_ AS Color) AS Image
+DECLARE FUNCTION GenImageGradientLinear LIB "raylib" ALIAS "GenImageGradientLinear" (width AS INTEGER, height AS INTEGER, direction AS INTEGER, start AS Color, _end AS Color) AS Image
 DECLARE FUNCTION GenImageGradientRadial LIB "raylib" ALIAS "GenImageGradientRadial" (width AS INTEGER, height AS INTEGER, density AS SINGLE, inner AS Color, outer AS Color) AS Image
 DECLARE FUNCTION GenImageGradientSquare LIB "raylib" ALIAS "GenImageGradientSquare" (width AS INTEGER, height AS INTEGER, density AS SINGLE, inner AS Color, outer AS Color) AS Image
 DECLARE FUNCTION GenImageChecked LIB "raylib" ALIAS "GenImageChecked" (width AS INTEGER, height AS INTEGER, checksX AS INTEGER, checksY AS INTEGER, col1 AS Color, col2 AS Color) AS Image
@@ -914,8 +918,8 @@ DECLARE SUB      ImageClearBackground LIB "raylib" ALIAS "ImageClearBackground" 
 DECLARE SUB      ImageDrawPixel LIB "raylib" ALIAS "ImageDrawPixel" (dst AS PImage, posX AS INTEGER, posY AS INTEGER, color AS Color)
 DECLARE SUB      ImageDrawPixelV LIB "raylib" ALIAS "ImageDrawPixelV" (dst AS PImage, position AS Vector2, color AS Color)
 DECLARE SUB      ImageDrawLine LIB "raylib" ALIAS "ImageDrawLine" (dst AS PImage, startPosX AS INTEGER, startPosY AS INTEGER, endPosX AS INTEGER, endPosY AS INTEGER, color AS Color)
-DECLARE SUB      ImageDrawLineV LIB "raylib" ALIAS "ImageDrawLineV" (dst AS PImage, start AS Vector2, end_ AS Vector2, color AS Color)
-DECLARE SUB      ImageDrawLineEx LIB "raylib" ALIAS "ImageDrawLineEx" (dst AS PImage, start AS Vector2, end_ AS Vector2, thick AS INTEGER, color AS Color)
+DECLARE SUB      ImageDrawLineV LIB "raylib" ALIAS "ImageDrawLineV" (dst AS PImage, start AS Vector2, _end AS Vector2, color AS Color)
+DECLARE SUB      ImageDrawLineEx LIB "raylib" ALIAS "ImageDrawLineEx" (dst AS PImage, start AS Vector2, _end AS Vector2, thick AS INTEGER, color AS Color)
 DECLARE SUB      ImageDrawCircle LIB "raylib" ALIAS "ImageDrawCircle" (dst AS PImage, centerX AS INTEGER, centerY AS INTEGER, radius AS INTEGER, color AS Color)
 DECLARE SUB      ImageDrawCircleV LIB "raylib" ALIAS "ImageDrawCircleV" (dst AS PImage, center AS Vector2, radius AS INTEGER, color AS Color)
 DECLARE SUB      ImageDrawCircleLines LIB "raylib" ALIAS "ImageDrawCircleLines" (dst AS PImage, centerX AS INTEGER, centerY AS INTEGER, radius AS INTEGER, color AS Color)
@@ -974,7 +978,7 @@ DECLARE FUNCTION LoadFontEx LIB "raylib" ALIAS "LoadFontEx" (fileName AS POINTER
 DECLARE FUNCTION LoadFontFromImage LIB "raylib" ALIAS "LoadFontFromImage" (image AS Image, key AS Color, firstChar AS INTEGER) AS Font
 DECLARE FUNCTION LoadFontFromMemory LIB "raylib" ALIAS "LoadFontFromMemory" (fileType AS POINTER, fileData AS POINTER, dataSize AS INTEGER, fontSize AS INTEGER, codepoints AS POINTER, codepointCount AS INTEGER) AS Font
 DECLARE FUNCTION IsFontValid LIB "raylib" ALIAS "IsFontValid" (font AS Font) AS BYTE
-DECLARE FUNCTION LoadFontData LIB "raylib" ALIAS "LoadFontData" (fileData AS POINTER, dataSize AS INTEGER, fontSize AS INTEGER, codepoints AS POINTER, codepointCount AS INTEGER, type_ AS INTEGER) AS PGlyphInfo
+DECLARE FUNCTION LoadFontData LIB "raylib" ALIAS "LoadFontData" (fileData AS POINTER, dataSize AS INTEGER, fontSize AS INTEGER, codepoints AS POINTER, codepointCount AS INTEGER, _type AS INTEGER) AS PGlyphInfo
 DECLARE FUNCTION GenImageFontAtlas LIB "raylib" ALIAS "GenImageFontAtlas" (glyphs AS PGlyphInfo, glyphRecs AS POINTER, glyphCount AS INTEGER, fontSize AS INTEGER, padding AS INTEGER, packMethod AS INTEGER) AS Image
 DECLARE SUB      UnloadFontData LIB "raylib" ALIAS "UnloadFontData" (glyphs AS PGlyphInfo, glyphCount AS INTEGER)
 DECLARE SUB      UnloadFont LIB "raylib" ALIAS "UnloadFont" (font AS Font)
@@ -1109,7 +1113,7 @@ DECLARE FUNCTION IsSoundValid LIB "raylib" ALIAS "IsSoundValid" (sound AS Sound)
 DECLARE SUB      UpdateSound LIB "raylib" ALIAS "UpdateSound" (sound AS Sound, data AS POINTER, sampleCount AS INTEGER)
 DECLARE SUB      UnloadWave LIB "raylib" ALIAS "UnloadWave" (wave AS Wave)
 DECLARE SUB      UnloadSound LIB "raylib" ALIAS "UnloadSound" (sound AS Sound)
-DECLARE SUB      UnloadSoundAlias LIB "raylib" ALIAS "UnloadSoundAlias" (alias_ AS Sound)
+DECLARE SUB      UnloadSoundAlias LIB "raylib" ALIAS "UnloadSoundAlias" (_alias AS Sound)
 DECLARE FUNCTION ExportWave LIB "raylib" ALIAS "ExportWave" (wave AS Wave, fileName AS POINTER) AS BYTE
 DECLARE FUNCTION ExportWaveAsCode LIB "raylib" ALIAS "ExportWaveAsCode" (wave AS Wave, fileName AS POINTER) AS BYTE
 DECLARE SUB      PlaySound LIB "raylib" ALIAS "PlaySound" (sound AS Sound)

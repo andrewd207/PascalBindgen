@@ -209,12 +209,17 @@ type
     FFields: TBindingFieldList;
     FIsUnion: Boolean;
     FIsForwardDecl: Boolean;
+    FByteSize: Int64;
   public
     constructor Create(const AName: string; const ALocation: TSourceLoc; AIsUnion: Boolean);
     destructor Destroy; override;
     property Fields: TBindingFieldList read FFields;
     property IsUnion: Boolean read FIsUnion;
     property IsForwardDecl: Boolean read FIsForwardDecl write FIsForwardDecl;
+    { Total size in bytes from clang_Type_getSizeOf. 0 if forward
+      decl. Used by emitters to pad unions out to the full alt-set
+      width when only the first alt is typed. }
+    property ByteSize: Int64 read FByteSize write FByteSize;
   end;
 
   TBindingEnum = class(TBindingDecl)

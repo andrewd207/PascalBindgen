@@ -42,6 +42,7 @@ type
   private
     FUnitName: string;
     FLibrary: string;
+    FPrefixTypes: Boolean;
     FOutput: TStringList;
     FEmittedTypes: TStringList;
     FDeclaredTypeNames: TStringList;
@@ -68,11 +69,12 @@ type
     function  MapTypeForSig(T: TBindingType): string;
     function  MapPrimitive(const Spelling: string; SizeBytes: Int64 = 0): string;
     function  EscapeIdent(const S: string): string;
+    function  TypeIdent(const S: string): string;
     function  DisambiguateIdent(const CName: string): string;
     function  RawComment(const Raw: string): string;
     function  LibClause: string;
   public
-    constructor Create(const AUnitName, ALibrary: string);
+    constructor Create(const AUnitName, ALibrary: string; APrefixTypes: Boolean = False);
     destructor Destroy; override;
     function Emit(U: TBindingUnit): string;
   end;
@@ -97,11 +99,12 @@ const
     'single','double','string','pointer','ptrint','bool','boolean'
   );
 
-constructor TRqBasicEmitter.Create(const AUnitName, ALibrary: string);
+constructor TRqBasicEmitter.Create(const AUnitName, ALibrary: string; APrefixTypes: Boolean);
 begin
   inherited Create;
   FUnitName := AUnitName;
   FLibrary := ALibrary;
+  FPrefixTypes := APrefixTypes;
   FOutput := TStringList.Create;
   FEmittedTypes := TStringList.Create;
   FEmittedTypes.Sorted := True;
@@ -140,14 +143,41 @@ var
   Lower: string;
 begin
   if S = '' then begin Result := S; Exit; end;
-  Lower := LowerCase(S);
+  Result := S;
+  { Rapidq's lexer eats a trailing `_` as a line-continuation marker
+    even when it's the final char of an identifier — so
+    `name_<newline>` splices the underscore into the next line and
+    the parser bombs. Rotate any trailing underscores to leading
+    ones. Identifiers with leading underscores are accepted. }
+  while (Length(Result) > 0) and (Result[Length(Result)] = '_') do
+    Result := '_' + Copy(Result, 1, Length(Result) - 1);
+  Lower := LowerCase(Result);
   for I := Low(RQBASIC_RESERVED) to High(RQBASIC_RESERVED) do
     if Lower = RQBASIC_RESERVED[I] then
     begin
-      Result := S + '_';
+      Result := '_' + Result;
       Exit;
     end;
-  Result := S;
+end;
+
+{ Identifier for TYPE-block names (records, opaque forwards). With
+  --prefix-types ON, prepends `T` so the type namespace can't
+  case-fold-collide with the CONST/function namespace (e.g.
+  raylib's `Color` constant table vs the `Color` struct, SDL2's
+  `SDL_DISPLAYEVENT` CONST vs the `SDL_DisplayEvent` struct).
+  Pointer aliases stay on a separate `P<bare>` track via
+  AliasPointer. With the flag OFF, behaves like EscapeIdent. }
+function TRqBasicEmitter.TypeIdent(const S: string): string;
+begin
+  Result := EscapeIdent(S);
+  if not FPrefixTypes then Exit;
+  if Result = '' then Exit;
+  { Skip if already starts with T<uppercase> — keeps existing T-
+    prefixed names from doubling up (TList, TStream, TVec...). }
+  if (Length(Result) >= 2) and (Result[1] = 'T')
+     and (Result[2] >= 'A') and (Result[2] <= 'Z') then
+    Exit;
+  Result := 'T' + Result;
 end;
 
 function TRqBasicEmitter.DisambiguateIdent(const CName: string): string;
@@ -247,7 +277,7 @@ end;
   empty (void) collapse to bare POINTER — those aren't aliasable. }
 function TRqBasicEmitter.AliasPointer(const Pointee: string): string;
 var
-  L: string;
+  L, Bare: string;
 begin
   if Pointee = '' then begin Result := 'POINTER'; Exit; end;
   L := LowerCase(Pointee);
@@ -260,17 +290,24 @@ begin
     Result := 'POINTER';
     Exit;
   end;
-  { Reject anything that doesn't look like a bare identifier — e.g.
-    array-decoration `Foo(N)` or stray spaces — so we don't emit a
-    syntactically broken alias. }
   if (Pos('(', Pointee) > 0) or (Pos(' ', Pointee) > 0)
      or (Pos(',', Pointee) > 0) then
   begin
     Result := 'POINTER';
     Exit;
   end;
-  FPointerAliases.Add(Pointee);
-  Result := 'P' + Pointee;
+  { Under --prefix-types, MapType always returns `T<bare>` for any
+    TYPE reference — including names whose C bare form starts with
+    `_` (so the cheap "T followed by uppercase" check would miss).
+    The TypeIdent guard only skips re-prefix when the name is
+    *already* T<uppercase>; everywhere else it prepends. To round-
+    trip cleanly with the alias-emit loop, strip a single leading
+    T unconditionally here whenever the flag is on. }
+  Bare := Pointee;
+  if FPrefixTypes and (Length(Bare) >= 1) and (Bare[1] = 'T') then
+    Bare := Copy(Bare, 2, MaxInt);
+  FPointerAliases.Add(Bare);
+  Result := 'P' + Bare;
 end;
 
 { Recursively touch every pointer-bearing position in T so that
@@ -403,11 +440,10 @@ begin
             that rqbasic can't resolve at semantic-analysis time. }
           Result := 'POINTER'
         else
-          { Escape if the C name collides with a reserved word — the
-            matching TYPE block is emitted under EscapeIdent(Name),
-            so references have to follow the same rule (`Color` ->
-            `Color_`). }
-          Result := EscapeIdent(Inner);
+          { Reference a TYPE block — must match the emission name
+            (T-prefix + trailing-underscore rotation under
+            --prefix-types). }
+          Result := TypeIdent(Inner);
       end;
     tkPrimitive:
       Result := MapPrimitive(T.Spelling, T.ByteSize);
@@ -479,6 +515,25 @@ begin
   Line(Sig);
 end;
 
+{ Byte width of the rqbasic-spelled primitives we'd see as a
+  union's first alt. Typed pointers (P-aliases) and records are out
+  of scope — fall back to 0 there, which makes EmitRecord skip the
+  pad and surface the size mismatch as a comment instead of
+  emitting a wrong pad. }
+function RqbasicSizeOf(const Mapped: string): Int64;
+var
+  L: string;
+begin
+  L := LowerCase(Mapped);
+  if      (L = 'byte') or (L = 'bool') or (L = 'boolean') then Result := 1
+  else if (L = 'word') or (L = 'short') then Result := 2
+  else if (L = 'integer') or (L = 'dword') or (L = 'single') then Result := 4
+  else if (L = 'long') or (L = 'int64') or (L = 'uint64') or (L = 'double')
+          or (L = 'pointer') or (L = 'ptrint') or (L = 'pchar') then Result := 8
+  else if (Length(L) >= 1) and (L[1] = 'p') then Result := 8
+  else Result := 0;
+end;
+
 procedure TRqBasicEmitter.EmitRecord(R: TBindingRecord);
 var
   I: Integer;
@@ -486,11 +541,23 @@ var
   Mapped: string;
 begin
   if R.RawComment <> '' then Line(RawComment(R.RawComment));
+  { Forward-declared / opaque struct (no fields): emit a single
+    placeholder so rqbasic's "TYPE name ... END TYPE must have a
+    body" rule is satisfied. The size is wrong on purpose — callers
+    only ever see PSDL_hid_device pointers, never the value. }
+  if (not R.IsUnion) and (R.Fields.Count = 0) then
+  begin
+    Line('''opaque forward decl');
+    Line(Format('TYPE %s', [TypeIdent(R.Name)]));
+    Line('  _opaque AS BYTE');
+    Line('END TYPE');
+    Exit;
+  end;
   if R.IsUnion then
-    Line(Format('TYPE %s  '' union — first alternative only',
-                [EscapeIdent(R.Name)]))
+    Line(Format('TYPE %s  '' union — first alt typed, remainder byte-padded',
+                [TypeIdent(R.Name)]))
   else
-    Line(Format('TYPE %s', [EscapeIdent(R.Name)]));
+    Line(Format('TYPE %s', [TypeIdent(R.Name)]));
   if R.IsUnion and (R.Fields.Count > 0) then
   begin
     F := R.Fields.Items[0];
@@ -500,6 +567,21 @@ begin
     for I := 1 to R.Fields.Count - 1 do
       Line(Format('  '' alt %d: %s AS %s',
            [I, R.Fields.Items[I].Name, MapType(R.Fields.Items[I].FieldType)]));
+    { Pad to the union's total byte width using clang's size. Without
+      this, DIM ev AS SDL_Event allocates only the first-alt's bytes
+      and SDL_PollEvent's full-size write smashes neighbouring locals.
+      We can't get the first-alt's byte width without a wider IR pass,
+      so use the field type's mapped size as an approximation —
+      rqbasic primitives are well-known widths. }
+    if (R.ByteSize > 0)
+       and (R.Fields.Count > 0) then
+    begin
+      Mapped := MapType(R.Fields.Items[0].FieldType);
+      I := R.ByteSize - RqbasicSizeOf(Mapped);
+      if I > 0 then
+        Line(Format('  __pad(%d) AS BYTE  '' pad to union total %d bytes',
+                    [I - 1, R.ByteSize]));
+    end;
   end
   else if not R.IsUnion then
     for I := 0 to R.Fields.Count - 1 do
@@ -598,7 +680,7 @@ end;
 
 function TRqBasicEmitter.Emit(U: TBindingUnit): string;
 var
-  I: Integer;
+  I, J: Integer;
   D: TBindingDecl;
   Td: TBindingTypedef;
   AT: TBindingType;
@@ -671,7 +753,7 @@ begin
             if FDeclaredTypeNames.IndexOf(Mapped) < 0 then
               Mapped := ''
             else
-              Mapped := EscapeIdent(Mapped);
+              Mapped := TypeIdent(Mapped);
           end;
         end;
     end;
@@ -696,7 +778,7 @@ begin
   begin
     for I := 0 to FPointerAliases.Count - 1 do
       Line(Format('TYPE P%s AS %s Ptr',
-                  [FPointerAliases[I], EscapeIdent(FPointerAliases[I])]));
+                  [FPointerAliases[I], TypeIdent(FPointerAliases[I])]));
     Line;
   end;
 
@@ -709,7 +791,11 @@ begin
   end;
   Line;
 
-  { #define-style integer macros. }
+  { #define-style integer macros. Each name is also recorded in
+    FDeclaredTypeNames (case-folded) so the subsequent function
+    pass's DisambiguateIdent will rename any C function whose name
+    case-folds to a CONST — SDL2's `SDL_QUIT` CONST vs `SDL_Quit`
+    SUB is the canonical case. }
   for I := 0 to U.Decls.Count - 1 do
   begin
     D := U.Decls.Items[I];
@@ -717,7 +803,17 @@ begin
     if FEmittedTypes.IndexOf('c:' + LowerCase(D.Name)) >= 0 then Continue;
     if BlaiseRejectsMacro(TBindingMacroConst(D).RawValue) then Continue;
     FEmittedTypes.Add('c:' + LowerCase(D.Name));
+    FDeclaredTypeNames.Add(LowerCase(D.Name));
     EmitMacro(TBindingMacroConst(D));
+  end;
+  { Same treatment for enum constants — they share the namespace
+    with macros and functions. }
+  for I := 0 to U.Decls.Count - 1 do
+  begin
+    D := U.Decls.Items[I];
+    if not (D is TBindingEnum) then Continue;
+    for J := 0 to TBindingEnum(D).Constants.Count - 1 do
+      FDeclaredTypeNames.Add(LowerCase(TBindingEnum(D).Constants.Items[J].Name));
   end;
   Line;
 

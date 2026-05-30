@@ -314,11 +314,24 @@ var
   Kids: TClangCursorArray;
   K: TClangCursor;
   I: Integer;
-  FT: TClangType;
+  FT, CT: TClangType;
   Field: TBindingField;
+  Sz: Int64;
 begin
   Result := TBindingRecord.Create(C.Spelling, CursorLoc(C), IsUnion);
   AttachComment(Result, C);
+  { Capture total byte size from clang. Negative results come back
+    for incomplete / dependent types — clamp to 0. Used by emitters
+    to pad unions to their real width even when we only type the
+    first alternative. }
+  CT := C.TypeOf;
+  try
+    Sz := CT.SizeOf;
+    if Sz < 0 then Sz := 0;
+    Result.ByteSize := Sz;
+  finally
+    CT.Free;
+  end;
   Kids := CursorChildren(C);
   try
     for I := 0 to High(Kids) do
