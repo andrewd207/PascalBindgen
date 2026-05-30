@@ -12,30 +12,23 @@
 $INCLUDE "gl_rqbasic.bas"
 $INCLUDE "glut_rqbasic.bas"
 
-' rapidq's SINGLE-by-value FFI is currently broken — the float bits
-' don't reach C correctly (verified with libm sinf). Use the *d
-' (double) variants of every GL call to sidestep it.
-DIM angle AS DOUBLE
+DIM angle AS SINGLE
 
 SUB Display
   glClear(GL_COLOR_BUFFER_BIT)
 
-  ' Set projection here every frame — saves us from depending on
-  ' Reshape having fired before the first Display. Ortho keeps the
-  ' rendering pipeline trivial: NDC is [-2,2] in x/y and [-2,2] in z
-  ' (so the rotating triangle stays inside clip space at any angle).
   glMatrixMode(GL_PROJECTION)
   glLoadIdentity
   glOrtho(-1.5, 1.5, -1.5, 1.5, -2.0, 2.0)
 
   glMatrixMode(GL_MODELVIEW)
   glLoadIdentity
-  glRotated(angle, 0.3, 1.0, 0.2)
+  glRotatef(angle, 0.3, 1.0, 0.2)
 
   glBegin(GL_TRIANGLES)
-    glColor3d(1.0, 0.2, 0.2): glVertex3d( 0.0,  1.0, 0.0)
-    glColor3d(0.2, 1.0, 0.2): glVertex3d(-1.0, -1.0, 0.0)
-    glColor3d(0.2, 0.4, 1.0): glVertex3d( 1.0, -1.0, 0.0)
+    glColor3f(1.0, 0.2, 0.2): glVertex3f( 0.0,  1.0, 0.0)
+    glColor3f(0.2, 1.0, 0.2): glVertex3f(-1.0, -1.0, 0.0)
+    glColor3f(0.2, 0.4, 1.0): glVertex3f( 1.0, -1.0, 0.0)
   glEnd
 
   glutSwapBuffers
@@ -66,8 +59,7 @@ glutInitDisplayMode(GLUT_DOUBLE OR GLUT_RGB OR GLUT_DEPTH)
 glutInitWindowSize(640, 480)
 glutCreateWindow(PCHAR("rqbasic + OpenGL — spinning triangle"))
 
-' Default clear color (black) is fine here. glClearColor would take
-' four SINGLEs and trip the same FFI bug.
+glClearColor(0.07, 0.07, 0.09, 1.0)
 
 glutDisplayFunc(@Display)
 glutReshapeFunc(@Reshape)
