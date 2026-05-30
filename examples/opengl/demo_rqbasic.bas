@@ -12,7 +12,19 @@
 $INCLUDE "gl_rqbasic.bas"
 $INCLUDE "glut_rqbasic.bas"
 
+' TVec — same shape as GLfloat[3]. The whole record is 12 bytes
+' (3 packed SINGLEs); we hand its address to glVertex3fv / glColor3fv
+' so the GL driver reads three contiguous floats directly out of our
+' BASIC-side storage with no per-vertex marshalling.
+TYPE TVec
+  x AS SINGLE
+  y AS SINGLE
+  z AS SINGLE
+END TYPE
+
 DIM angle AS SINGLE
+DIM verts(2)  AS TVec
+DIM colors(2) AS TVec
 
 SUB Display
   glClear(GL_COLOR_BUFFER_BIT)
@@ -26,9 +38,9 @@ SUB Display
   glRotatef(angle, 0.3, 1.0, 0.2)
 
   glBegin(GL_TRIANGLES)
-    glColor3f(1.0, 0.2, 0.2): glVertex3f( 0.0,  1.0, 0.0)
-    glColor3f(0.2, 1.0, 0.2): glVertex3f(-1.0, -1.0, 0.0)
-    glColor3f(0.2, 0.4, 1.0): glVertex3f( 1.0, -1.0, 0.0)
+    glColor3fv(VARPTR(colors[0])): glVertex3fv(VARPTR(verts[0]))
+    glColor3fv(VARPTR(colors[1])): glVertex3fv(VARPTR(verts[1]))
+    glColor3fv(VARPTR(colors[2])): glVertex3fv(VARPTR(verts[2]))
   glEnd
 
   glutSwapBuffers
@@ -53,6 +65,17 @@ END SUB
 ' rqbasic doesn't grow that today.
 DIM argc AS INTEGER
 argc = 0
+
+' Geometry + per-vertex colour, in SINGLE-by-record form. These
+' arrays live for the lifetime of the program and get re-read each
+' frame by the GL driver via glVertex3fv / glColor3fv.
+verts[0].x =  0.0: verts[0].y =  1.0: verts[0].z = 0.0
+verts[1].x = -1.0: verts[1].y = -1.0: verts[1].z = 0.0
+verts[2].x =  1.0: verts[2].y = -1.0: verts[2].z = 0.0
+
+colors[0].x = 1.0: colors[0].y = 0.2: colors[0].z = 0.2
+colors[1].x = 0.2: colors[1].y = 1.0: colors[1].z = 0.2
+colors[2].x = 0.2: colors[2].y = 0.4: colors[2].z = 1.0
 
 glutInit(VARPTR(argc), null)
 glutInitDisplayMode(GLUT_DOUBLE OR GLUT_RGB OR GLUT_DEPTH)
