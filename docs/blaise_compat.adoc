@@ -10,7 +10,8 @@ Tested against:
 
 * FPC 3.3.1 (Linux x86_64, 2026-05-12 build)
 * Blaise v0.9.0-dev via `compiler/bootstrap/blaise_unit_source`
-* Date: 2026-05-27
+* Blaise v0.10.0-SNAPSHOT (re-check of the FItems[N] := X issue only)
+* Date: 2026-05-27 (initial), 2026-06-02 (re-check)
 
 == Compiler driver / link surface
 
@@ -44,7 +45,7 @@ linked in.
 | `arr[I].MethodCall`                  | OK                                    | Parse error; assign to a local first: `obj := arr[I]; obj.Method;`
 | `class function` / `class procedure` | OK with `static;` qualifier           | Not yet parsed (`Expected 'end' in class definition`); use a plain unit-level function
 | `const` parameter qualifier          | Supported                             | Not supported — drop the keyword (caller still passes by value)
-| `FItems[N] := Item;` (writing to array-of-T class field) | OK | Semantic error "Undeclared variable 'FItems'" — see repro below
+| `FItems[N] := Item;` (writing to array-of-T class field) | OK | Semantic error "Undeclared variable 'FItems'" — see repro below. **Still reproduces on v0.10.0-SNAPSHOT (2026-06-02)** even though local-`var` dynamic arrays now work end-to-end (`SetLength` + indexed read/write fine). Only the class-field indexed-write path is broken.
 | `Format(fmt, [...])` (SysUtils) | Supported via `TVarRec` | **Supported** — handles mixed Integer/string args, e.g. `Format('rc=%d for "%s"', [rc, fn])` works.
 | `Exception.CreateFmt(fmt, [...])` | Supported | **Not** present — no `CreateFmt` constructor on `Exception`. Workaround: `raise E.Create(Format(fmt, [...]))`. The "Array literal element N has type 'string'; expected 'Integer'" error in this case is downstream of CreateFmt being absent, not Format itself failing.
 | `@OutOrVarParam` (taking address of a `var`/`out` parameter) | OK | `Code generation error: Unsupported L-value form for var argument`. Workaround: stage through a local, then assign back.
