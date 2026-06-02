@@ -44,7 +44,7 @@ Out of scope (at least for v1):
 
 == Output dialects
 
-`pascal_bindgen` emits one of two dialects, selected by command-line
+`pascal_bindgen` emits one of three dialects, selected by command-line
 flag:
 
 `--blaise`::
@@ -59,9 +59,15 @@ flag:
   library name on the directive, `{$PACKRECORDS C}` at the top of the
   unit, and FPC-conventional naming.
 
-Exactly one of the two flags must be supplied. If the dialects diverge
-on a given construct, the divergence lives in the emitter — the parser
-and intermediate model are dialect-neutral.
+`--rqbasic`::
+  Emits RapidQ-ll BASIC (`.bas`). Flat sequence of `TYPE` / `CONST` /
+  `DECLARE` statements; no unit wrapper. Functions use
+  `DECLARE FUNCTION ... LIB "..." ALIAS "..."` form.
+
+Exactly one of these flags must be supplied (or none, for a debug
+dump). If the dialects diverge on a given construct, the divergence
+lives in the emitter — the parser and intermediate model are
+dialect-neutral.
 
 == Architecture (planned)
 
@@ -84,6 +90,8 @@ and intermediate model are dialect-neutral.
       +-- emit --> blaise.pas    (when --blaise)
       |
       +-- emit --> fpc.pas       (when --fpc)
+      |
+      +-- emit --> rqbasic.bas   (when --rqbasic)
 ----
 
 The split exists so the C-side work (which is where the hard cases
@@ -98,6 +106,37 @@ formatting).
 * Round-tripping. Generated `.pas` files are *output*, not source of
   truth. Edit the header (or the generator config) and re-run.
 
+== Quick start
+
+See `docs/example_gtk4.adoc` for a full end-to-end walkthrough that
+generates GTK 4 bindings for all three dialects and builds a working
+demo. The 30-second version:
+
+[source,shell]
+----
+# 1. Build the tool
+pasbuild
+
+# 2. Generate bindings (clang flags go after `--`)
+./target/pascal_bindgen --fpc \
+    --header /usr/include/gtk-4.0/gtk/gtk.h \
+    --output gtk4_fpc.pas \
+    --unit-name gtk4_fpc \
+    --library libgtk-4 \
+    -- $(pkg-config --cflags gtk4)
+
+# 3. Use it
+echo "uses gtk4_fpc;" > app.pas  # ...write your program...
+fpc app.pas
+----
+
 == Status
 
-Pre-alpha. Project skeleton initialised; parser not started.
+Working alpha. All three emitters (`--fpc`, `--blaise`, `--rqbasic`)
+produce buildable output for non-trivial real-world headers — see
+the `examples/` tree for GTK 4, Vulkan, SQLite, zlib, OpenGL/EGL,
+SDL2, Raylib, and Win32 demos.
+
+Known gaps: function-like `#define` macros, C++ headers, inline
+function bodies (declared but body dropped). See `Out of scope`
+above.

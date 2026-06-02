@@ -5,55 +5,70 @@
 
 [source,shell]
 ----
-pascal_bindgen --blaise --header <file.h> --output <file.pas> [options]
-pascal_bindgen --fpc    --header <file.h> --output <file.pas> [options]
+pascal_bindgen --blaise  --header <file.h> [--output <file.pas>] [options] [-- <clang args...>]
+pascal_bindgen --fpc     --header <file.h> [--output <file.pas>] [options] [-- <clang args...>]
+pascal_bindgen --rqbasic --header <file.h> [--output <file.bas>] [options] [-- <clang args...>]
+pascal_bindgen           --header <file.h>                                                       (debug dump)
 ----
+
+If no dialect flag is given the tool parses the header and prints a
+one-line-per-decl summary on stdout. Useful for sanity-checking what
+the parser sees before committing to an emitter.
 
 == Required flags
 
+`--header <path>`::
+  Path to the C header to translate. Currently single-header only;
+  use the header's own `#include` chain to pull related decls in.
+
+== Dialect flags (exactly one, or none for debug dump)
+
 `--blaise`::
-  Emit Blaise-dialect Pascal.
+  Emit Blaise-dialect Pascal. No `{$mode}` / `{$PACKRECORDS}`
+  directives, no `uses ctypes`, `external name '...'` syntax.
 
 `--fpc`::
-  Emit Free Pascal / Delphi-mode Pascal.
+  Emit Free Pascal / Delphi-mode Pascal. `{$mode objfpc}{$H+}`,
+  `{$PACKRECORDS C}`, `uses ctypes`, `cdecl;` modifier,
+  `external 'libfoo';` directive.
 
-`--blaise` and `--fpc` are mutually exclusive; exactly one must be
-given.
+`--rqbasic`::
+  Emit RapidQ-ll BASIC (`.bas`). Flat sequence of `TYPE` / `CONST` /
+  `DECLARE` statements; no unit wrapper.
 
-`--header <path>`::
-  Path to the C header to translate. May be repeated to emit a single
-  binding unit covering several related headers.
+== Options
 
 `--output <path>`::
-  Destination `.pas` file. `-` writes to stdout.
-
-== Common options (planned)
+  Destination file. `-` (or omitted) writes to stdout.
 
 `--unit-name <name>`::
-  Name to use in the emitted `unit X;` header. Defaults to the
-  output file's basename.
+  Name used in the emitted `unit X;` header (Pascal dialects only;
+  rqbasic has no unit wrapper). Defaults to the output file's
+  basename, or `bindings` if writing to stdout.
 
 `--library <name>`::
-  Library name to attach to `external` directives. For `--fpc` this
-  becomes `external 'libname';`. For `--blaise` it is emitted as a
-  comment until Blaise grows a matching syntax.
+  Library name attached to `external` directives.
++
+* `--fpc` → `external 'libname' name '...';`
+* `--rqbasic` → `DECLARE ... LIB "libname" ALIAS "..."`.
+* `--blaise` records it as a provenance comment (Blaise hasn't
+  grown a library directive yet).
 
-`--include-dir <dir>` (repeatable)::
-  Added to the C preprocessor's include search path.
+`--prefix-types`::
+  Prefixes every emitted type name with `T` (e.g. `GtkWindow` →
+  `TGtkWindow`) so the type namespace can't case-fold-collide with
+  constants or function names. All three dialects support it.
+  Pointer aliases stay on the bare `P<name>` track and point at
+  the prefixed type (e.g. `PGtkWindow = ^TGtkWindow`). Names that
+  already start with `T<uppercase>` (TList, TStream, ...) are
+  passed through unchanged so they don't double-up.
 
-`--define <NAME[=VALUE]>` (repeatable)::
-  Passed to the C preprocessor as `-D`.
-
-`--prefix-strip <prefix>` (repeatable)::
-  C identifier prefix to remove when generating the Pascal name
-  (e.g. `--prefix-strip gtk_` turns `gtk_window_new` into
-  `window_new`).
-
-`--no-comments`::
-  Suppress all generated comments except the provenance header at
-  the top of the file. Useful for keeping diffs small when only a
-  handful of declarations changed. See `docs/comments.adoc` for what
-  is normally emitted.
+`--`::
+  Everything after `--` is forwarded verbatim to clang as parser
+  arguments. This is how you pass `-I`, `-D`, `-include`, target
+  triples, etc. — pascal_bindgen does not parse these itself.
++
+Example: `-- -I/usr/include/gtk-4.0 -DG_DISABLE_DEPRECATED`.
 
 == Exit codes
 
@@ -64,4 +79,12 @@ given.
   Parse error in the header (clang diagnostics emitted to stderr).
 
 `2`::
-  CLI usage error (missing flag, both dialect flags given, etc.).
+  CLI usage error (missing `--header`, unknown flag, etc.).
+
+== See also
+
+* `docs/overview.adoc` — what the tool is and isn't.
+* `docs/example_gtk4.adoc` — full end-to-end worked example
+  generating GTK 4 bindings.
+* `docs/blaise_compat.adoc` — Blaise-vs-FPC dual-build notes.
+* `docs/comments.adoc` — what the emitters write into the output.

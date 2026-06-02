@@ -56,6 +56,7 @@ type
       record fields and function params must reference a named alias
       or fall back to Pointer. Flipped on inside EmitTypedef. }
     FInTypedefBody: Boolean;
+    FPrefixTypes: Boolean;
     procedure Line(const S: string = '');
     procedure EmitProvenance(U: TBindingUnit);
     procedure EmitDecl(D: TBindingDecl);
@@ -70,12 +71,16 @@ type
     function  AliasPointer(const Raw: string): string;
     function  LocComment(const Loc: TSourceLoc): string;
     function  EscapeIdent(const S: string): string;
+    { Like EscapeIdent, but prepends 'T' to type names when
+      --prefix-types is on. Same guard as FPC/rqbasic. }
+    function  TypeIdent(const S: string): string;
     function  DisambiguateIdent(const CName: string): string;
     function  PascalizeComment(const Raw: string): string;
     procedure CollectFunctionPointerAliases(U: TBindingUnit);
     procedure WalkTypeForAliases(T: TBindingType);
   public
-    constructor Create(const AUnitName, ALibrary: string);
+    constructor Create(const AUnitName, ALibrary: string;
+                       APrefixTypes: Boolean = False);
     destructor Destroy; override;
     function Emit(U: TBindingUnit): string;
   end;
@@ -101,11 +106,13 @@ const
     'abort','integer','boolean','pointer','pchar'
   );
 
-constructor TBlaiseEmitter.Create(const AUnitName, ALibrary: string);
+constructor TBlaiseEmitter.Create(const AUnitName, ALibrary: string;
+                                  APrefixTypes: Boolean);
 begin
   inherited Create;
   FUnitName := AUnitName;
   FLibrary := ALibrary;
+  FPrefixTypes := APrefixTypes;
   FOutput := TStringList.Create;
   FEmittedTypes := TStringList.Create;
   FEmittedTypes.Sorted := True;
@@ -242,6 +249,17 @@ begin
   Result := S;
 end;
 
+function TBlaiseEmitter.TypeIdent(const S: string): string;
+begin
+  Result := EscapeIdent(S);
+  if not FPrefixTypes then Exit;
+  if Result = '' then Exit;
+  if (Length(Result) >= 2) and (Result[1] = 'T')
+     and (Result[2] >= 'A') and (Result[2] <= 'Z') then
+    Exit;
+  Result := 'T' + Result;
+end;
+
 procedure TBlaiseEmitter.Line(const S: string);
 begin
   FOutput.Add(S);
@@ -329,11 +347,21 @@ begin
     if (Length(Pointee) >= 1) and (Pointee[1] = '^') then
     begin
       InnerAlias := AliasPointer(Pointee);
+      { Keep the P-track on bare (unprefixed) names so 'PPX = ^PX'
+        reads cleanly when --prefix-types is on. }
+      if FPrefixTypes and (Length(InnerAlias) >= 2)
+         and (InnerAlias[1] = 'P') and (InnerAlias[2] = 'T') then
+        InnerAlias := 'P' + Copy(InnerAlias, 3, MaxInt);
       Result := 'P' + InnerAlias;
       FPointerAliases.Add(InnerAlias);
     end
     else
     begin
+      { Under --prefix-types, MapType returns 'TX' for any type ref;
+        strip the T here so FPointerAliases stays in bare form and
+        the emit loop produces 'PX = ^TX'. }
+      if FPrefixTypes and (Length(Pointee) >= 1) and (Pointee[1] = 'T') then
+        Pointee := Copy(Pointee, 2, MaxInt);
       Result := 'P' + Pointee;
       FPointerAliases.Add(Pointee);
     end;
@@ -506,7 +534,7 @@ begin
                 and (FDeclaredTypeNames.IndexOf(Inner) < 0) then
           Result := 'Cardinal'
         else
-          Result := Inner;
+          Result := TypeIdent(Inner);
       end;
     tkFunctionPointer:
       begin
@@ -612,7 +640,7 @@ begin
     { Blaise has no variant-part records. Emit the first alternative
       as the active field; surface the rest as comments. }
     Line(Format('  %s = record  { union — using first alternative; size may differ from C } %s',
-                [EscapeIdent(R.Name), LocComment(R.Location)]));
+                [TypeIdent(R.Name), LocComment(R.Location)]));
     if R.Fields.Count > 0 then
     begin
       F := R.Fields.Items[0];
@@ -625,7 +653,7 @@ begin
   end
   else
   begin
-    Line(Format('  %s = record%s', [EscapeIdent(R.Name), LocComment(R.Location)]));
+    Line(Format('  %s = record%s', [TypeIdent(R.Name), LocComment(R.Location)]));
     for I := 0 to R.Fields.Count - 1 do
     begin
       F := R.Fields.Items[I];
@@ -649,7 +677,7 @@ begin
   else
     Underlying := 'Integer';
   if Underlying = '' then Underlying := 'Integer';
-  Line(Format('  %s = %s;%s', [EscapeIdent(E.Name), Underlying, LocComment(E.Location)]));
+  Line(Format('  %s = %s;%s', [TypeIdent(E.Name), Underlying, LocComment(E.Location)]));
   { Constants are batched into a single const block emitted after
     the entire type section closes — keeps forward type refs
     resolvable across the section. }
@@ -669,8 +697,11 @@ begin
   if Aliased = '' then Aliased := 'Pointer';
   { Vacuous self-typedef ('typedef struct X X;') — skip. Pascal is
     case-insensitive, so compare lowered. }
+  { Vacuous self-typedef — also catches the case where --prefix-types
+    has T-prefixed both sides ('TX = TX;'). }
+  if LowerCase(Aliased) = LowerCase(TypeIdent(T.Name)) then Exit;
   if LowerCase(Aliased) = LowerCase(T.Name) then Exit;
-  Line(Format('  %s = %s;%s', [EscapeIdent(T.Name), Aliased, LocComment(T.Location)]));
+  Line(Format('  %s = %s;%s', [TypeIdent(T.Name), Aliased, LocComment(T.Location)]));
 end;
 
 procedure TBlaiseEmitter.EmitMacro(M: TBindingMacroConst);
@@ -781,7 +812,7 @@ begin
     for I := 0 to FOpaqueTypedefs.Count - 1 do
       if FDeclaredTypeNames.IndexOf(FOpaqueTypedefs[I]) < 0 then
         Line(Format('  %s = Pointer;  { opaque — layout unknown, assumed pointer-shaped }',
-                    [EscapeIdent(FOpaqueTypedefs[I])]));
+                    [TypeIdent(FOpaqueTypedefs[I])]));
     { Synthesized 'P<X> = ^X' aliases — emit forward-record stubs for
       pointee names we don't otherwise declare. }
     if FPointerAliases.Count > 0 then
@@ -802,7 +833,7 @@ begin
            or (Pos('*', FPointerAliases[I]) > 0)
            or (Pos('__va_list_tag', FPointerAliases[I]) > 0)
            or (Copy(FPointerAliases[I], 1, 2) = '__') then Continue;
-        Line(Format('  %s = record end;', [EscapeIdent(FPointerAliases[I])]));
+        Line(Format('  %s = record end;', [TypeIdent(FPointerAliases[I])]));
       end;
       for I := 0 to FPointerAliases.Count - 1 do
       begin
@@ -815,7 +846,7 @@ begin
         if FDeclaredTypeNames.IndexOf('P' + FPointerAliases[I]) >= 0 then
           Continue;
         Line(Format('  P%s = ^%s;',
-                    [FPointerAliases[I], EscapeIdent(FPointerAliases[I])]));
+                    [FPointerAliases[I], TypeIdent(FPointerAliases[I])]));
       end;
     end;
     for I := 0 to U.Decls.Count - 1 do

@@ -139,9 +139,9 @@ begin
       Dialect := 'blaise'
     else if Arg = '--rqbasic' then
       Dialect := 'rqbasic'
-    { rqbasic-only: T-prefix every TYPE name so the type namespace
-      can't case-fold-collide with constants/functions. Pointer
-      aliases stay on the separate P<bare> track. }
+    { T-prefix every TYPE name so the type namespace can't case-
+      fold-collide with constants/functions. Pointer aliases stay
+      on the separate P<bare> track. Applies to all three dialects. }
     else if Arg = '--prefix-types' then
       PrefixTypes := True
     else if Arg = '--' then
@@ -157,7 +157,7 @@ begin
     if Dialect = 'fpc' then
     begin
       if UnitName = '' then UnitName := DeriveUnitName(OutputPath, HeaderPath);
-      FpcEmitter := TFpcEmitter.Create(UnitName, LibraryName);
+      FpcEmitter := TFpcEmitter.Create(UnitName, LibraryName, PrefixTypes);
       try
         if OutputPath = '' then OutputPath := '-';
         WriteAllText(OutputPath, FpcEmitter.Emit(U));
@@ -168,7 +168,7 @@ begin
     else if Dialect = 'blaise' then
     begin
       if UnitName = '' then UnitName := DeriveUnitName(OutputPath, HeaderPath);
-      BlaiseEmitter := TBlaiseEmitter.Create(UnitName, LibraryName);
+      BlaiseEmitter := TBlaiseEmitter.Create(UnitName, LibraryName, PrefixTypes);
       try
         if OutputPath = '' then OutputPath := '-';
         WriteAllText(OutputPath, BlaiseEmitter.Emit(U));
