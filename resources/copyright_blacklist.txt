@@ -1,0 +1,6 @@
+# Skip everything under examples/.
+# The generated binding files there are derived from third-party C
+# headers (GTK 4, Vulkan, SQLite, zlib, OpenGL, Win32, ...) whose
+# copyright belongs to the upstream projects, not us. Hand-written
+# demos in the same tree aren't worth singling out.
+examples/
