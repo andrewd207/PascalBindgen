@@ -1,3 +1,12 @@
+{
+  This file is part of the pascal_bindgen project.
+  Copyright (c) 2026 Andrew Haines
+
+  SPDX-License-Identifier: BSD-3-Clause
+
+  Licensed under the BSD-3-Clause License. See LICENSE file for details.
+}
+
 { bindgen.blob — small heap-resizable byte buffer with file I/O.
 
   Exists because FPC's TFileStream / TStringList APIs and Blaise's
