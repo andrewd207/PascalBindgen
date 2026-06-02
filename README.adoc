@@ -1,0 +1,144 @@
+= pascal_bindgen
+Andrew Haines
+:toc: preamble
+
+C header → Object Pascal binding generator. Reads a `.h` file via
+libclang and emits `external` function prototypes, record layouts,
+enums, and `#define` constants in one of three dialects: Free Pascal
+(FPC), Blaise, or RapidQ-ll BASIC.
+
+Not a C compiler. Not a hand-port replacement. Just a focused tool
+that turns a header into a `uses`-able Pascal unit (or a flat `.bas`
+file for rqbasic) so you can link against the underlying C library
+without writing externs by hand.
+
+== Quick start
+
+[source,shell]
+----
+# Build
+pasbuild
+
+# Generate (clang flags after `--`)
+./target/pascal_bindgen --fpc \
+    --header /usr/include/gtk-4.0/gtk/gtk.h \
+    --output gtk4_fpc.pas \
+    --unit-name gtk4_fpc \
+    --library libgtk-4 \
+    -- $(pkg-config --cflags gtk4)
+
+# Use
+echo "uses gtk4_fpc;" > app.pas    # ...write your program...
+fpc app.pas
+----
+
+End-to-end walkthrough with a working demo: link:docs/example_gtk4.adoc[docs/example_gtk4.adoc].
+
+== Output dialects
+
+Pick one with a flag:
+
+`--fpc`::
+  Free Pascal / Delphi-mode. `{$mode objfpc}{$H+}`, `{$PACKRECORDS C}`,
+  `uses ctypes`, `cdecl;` modifier, `external 'libfoo';` directive.
+`--blaise`::
+  Blaise compiler dialect. No `{$mode}` / `{$PACKRECORDS}`, no
+  `ctypes`, `external name '...'` syntax.
+`--rqbasic`::
+  RapidQ-ll BASIC (`.bas`). Flat `TYPE` / `CONST` / `DECLARE`
+  statements; no unit wrapper.
+
+The parser and IR are dialect-neutral; only the emitters differ. See
+link:docs/cli.adoc[docs/cli.adoc] for the full flag list and
+link:docs/overview.adoc[docs/overview.adoc] for the architecture.
+
+== Architecture
+
+[source]
+----
+  .h file(s)
+      |
+      v   libclang via FFI shim
+  +-----------------+
+  | parser          |
+  +-----------------+
+      |
+      v
+  +-----------------+
+  | binding IR      |   dialect-neutral
+  +-----------------+
+      |
+      +-- emit --> .pas  (--fpc)
+      +-- emit --> .pas  (--blaise)
+      +-- emit --> .bas  (--rqbasic)
+----
+
+The FFI shim (`src/main/c/libclang_shim.c`) wraps libclang's
+by-value `CXCursor` / `CXString` / `CXType` surface behind opaque
+pointers so a Pascal frontend without full SysV ABI support can
+still talk to libclang. Required for Blaise; FPC could in principle
+go direct but uses the same shim for parity.
+
+== Scope
+
+In scope:
+
+* `extern` function declarations, including varargs
+* `typedef` aliases (resolved to underlying type when possible)
+* `struct` / `union` layouts
+* `enum` constants
+* `#define` simple value macros (integer / string literals)
+* Pointer, array, function-pointer parameter types
+* Calling conventions (cdecl by default, stdcall / fastcall where annotated)
+* Bit-fields (best effort, comment when not representable)
+
+Out of scope (v1):
+
+* Function-like macros with bodies (`#define ADD(a,b) ((a)+(b))`)
+* C++ headers (overloads, templates, namespaces, references)
+* Inline function bodies — declared, body dropped
+* `_Generic`, `__attribute__((...))`-driven semantic changes
+
+== Examples
+
+The `examples/` tree has generated bindings + demo programs for:
+
+* GTK 4 (FPC, Blaise, rqbasic)
+* SDL 2 (rqbasic)
+* Raylib (rqbasic, including a two-player Pong demo)
+* Vulkan (FPC, Blaise)
+* OpenGL / EGL (FPC, rqbasic)
+* SQLite (FPC, Blaise, rqbasic)
+* zlib (FPC, Blaise)
+* Win32 (Blaise)
+
+Each example folder contains a `build*.sh` script. `examples/build_all_rqbasic.sh`
+smoke-builds the rqbasic set.
+
+== Requirements
+
+* Free Pascal 3.3.1+ (or compatible) for the build itself.
+* `pasbuild` to drive compilation.
+* libclang 17 dev package + headers (Debian: `libclang-17-dev`). The
+  FFI shim is linked against libclang at build time.
+* For the examples: whatever headers the target wraps
+  (`libgtk-4-dev`, `libvulkan-dev`, etc.).
+
+== Documentation
+
+* link:docs/overview.adoc[overview] — what the tool is and isn't.
+* link:docs/cli.adoc[cli] — every flag, exit codes.
+* link:docs/example_gtk4.adoc[example_gtk4] — end-to-end walkthrough.
+* link:docs/blaise_compat.adoc[blaise_compat] — Blaise-vs-FPC quirks
+  hit while dual-building this tool.
+* link:docs/comments.adoc[comments] — what the emitters write into
+  output beyond the bare declarations.
+
+== License
+
+BSD-3-Clause. See link:LICENSE[LICENSE].
+
+Generated bindings under `examples/` are derivative of their upstream
+headers (GTK, Vulkan, SQLite, zlib, OpenGL/EGL, Win32 SDK, ...) and
+inherit those projects' licenses; they are excluded from this
+project's BSD-3 copyright via `resources/copyright_blacklist.txt`.
