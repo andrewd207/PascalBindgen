@@ -34,6 +34,25 @@ fpc app.pas
 
 End-to-end walkthrough with a working demo: link:docs/example_gtk4.adoc[docs/example_gtk4.adoc].
 
+=== Cross-platform bindings in one pass
+
+Pass `--target SYMBOL:TRIPLE` (repeatable) to parse the header for
+multiple clang targets in a single run. Decls that differ across
+targets emit inside `{$IFDEF SYMBOL}` guards; identical decls stay
+unguarded.
+
+[source,shell]
+----
+./target/pascal_bindgen --fpc --header foo.h --output foo.pas \
+    --target UNIX:x86_64-pc-linux-gnu \
+    --target WINDOWS:x86_64-w64-mingw32 \
+    --target-args 'WINDOWS=-isystem /usr/x86_64-w64-mingw32/include'
+----
+
+Single-target (or no `--target`) runs are byte-identical to the
+legacy output. See `docs/overview.adoc` for caveats around Win32 vs
+Win64 and calling-convention handling.
+
 == Output dialects
 
 Pick one with a flag:

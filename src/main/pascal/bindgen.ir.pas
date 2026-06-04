@@ -189,12 +189,20 @@ type
     FLocation: TSourceLoc;
     FRawComment: string;
     FLossReason: string;
+    FPlatforms: TStringList;
   public
     constructor Create(const AName: string; const ALocation: TSourceLoc);
+    destructor Destroy; override;
     property Name: string read FName write FName;
     property Location: TSourceLoc read FLocation write FLocation;
     property RawComment: string read FRawComment write FRawComment;
     property LossReason: string read FLossReason write FLossReason;
+    { Multi-target gating. Empty list = decl is present on every
+      target in the run's universe (TBindingUnit.Targets) and emitters
+      should leave it unguarded. Non-empty = decl belongs only to the
+      named platform symbols and emitters wrap it in an $IFDEF guard.
+      Single-target runs always leave this empty. }
+    property Platforms: TStringList read FPlatforms;
   end;
 
   TBindingFunction = class(TBindingDecl)
@@ -270,6 +278,11 @@ type
     destructor Destroy; override;
     function Count: Integer;
     procedure Add(Item: TBindingDecl);
+    { Drop all items from the list without freeing them. The caller
+      has taken ownership and is responsible for freeing each decl
+      they kept. Used by bindgen.merge to steal decls out of the
+      input units. }
+    procedure ReleaseAll;
     property Items[I: Integer]: TBindingDecl read GetItem;
   end;
 
@@ -279,14 +292,26 @@ type
     FDecls: TBindingDeclList;
     FCommandLine: string;
     FClangVersion: string;
+    FTargets: TStringList;
   public
     constructor Create;
     destructor Destroy; override;
     procedure AddHeader(const Path: string);
+    { Replace the owned decl list (transferring ownership of the new
+      list to this unit). The old list is freed, which Frees every
+      decl it still holds — callers who want to keep decls alive must
+      remove them from the list first. Used by bindgen.merge to
+      siphon decls out of input units. }
+    procedure ReplaceDecls(NewDecls: TBindingDeclList);
     property HeaderPaths: TStringList read FHeaderPaths;
     property Decls: TBindingDeclList read FDecls;
     property CommandLine: string read FCommandLine write FCommandLine;
     property ClangVersion: string read FClangVersion write FClangVersion;
+    { Universe of platform symbols this unit was built for. Single-
+      target runs leave this empty (emitters then ignore decl-level
+      Platforms entirely). Multi-target runs list each symbol in the
+      order the user supplied --target. }
+    property Targets: TStringList read FTargets;
   end;
 
 function MakeLoc(const FileName: string; Line, Col: Cardinal): TSourceLoc;
@@ -329,6 +354,10 @@ end;
 procedure TBindingDeclList.Add(Item: TBindingDecl);
 begin
   FItems.Add(Item);
+end;
+procedure TBindingDeclList.ReleaseAll;
+begin
+  FItems.Clear;
 end;
 
 constructor TBindingTypeList.Create;
@@ -461,6 +490,13 @@ begin
   inherited Create;
   FName := AName;
   FLocation := ALocation;
+  FPlatforms := TStringList.Create;
+end;
+
+destructor TBindingDecl.Destroy;
+begin
+  FPlatforms.Free;
+  inherited Destroy;
 end;
 
 { TBindingType }
@@ -594,18 +630,26 @@ begin
   inherited Create;
   FHeaderPaths := TStringList.Create;
   FDecls := TBindingDeclList.Create;
+  FTargets := TStringList.Create;
 end;
 
 destructor TBindingUnit.Destroy;
 begin
   FHeaderPaths.Free;
   FDecls.Free;
+  FTargets.Free;
   inherited Destroy;
 end;
 
 procedure TBindingUnit.AddHeader(const Path: string);
 begin
   FHeaderPaths.Add(Path);
+end;
+
+procedure TBindingUnit.ReplaceDecls(NewDecls: TBindingDeclList);
+begin
+  FDecls.Free;
+  FDecls := NewDecls;
 end;
 
 end.

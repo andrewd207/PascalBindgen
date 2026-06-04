@@ -9,6 +9,10 @@ pascal_bindgen --blaise  --header <file.h> [--output <file.pas>] [options] [-- <
 pascal_bindgen --fpc     --header <file.h> [--output <file.pas>] [options] [-- <clang args...>]
 pascal_bindgen --rqbasic --header <file.h> [--output <file.bas>] [options] [-- <clang args...>]
 pascal_bindgen           --header <file.h>                                                       (debug dump)
+
+# Multi-target (Win32/Win64/UNIX/...) — repeat --target per platform:
+pascal_bindgen --fpc --header <file.h> --output <file.pas> \
+    --target <SYMBOL>:<TRIPLE> [--target-args <SYMBOL>=<ARGS>]... [options]
 ----
 
 If no dialect flag is given the tool parses the header and prints a
@@ -69,6 +73,28 @@ the parser sees before committing to an emitter.
   triples, etc. — pascal_bindgen does not parse these itself.
 +
 Example: `-- -I/usr/include/gtk-4.0 -DG_DISABLE_DEPRECATED`.
+
+`--target <SYMBOL>:<TRIPLE>`::
+  Parse the header for the given clang `<TRIPLE>` and tag the
+  resulting decls with `<SYMBOL>` (e.g. `WINDOWS`, `UNIX`, `WIN32`,
+  `WIN64`). Repeatable: each `--target` runs one independent clang
+  parse; the resulting IRs are merged so decls that differ across
+  targets emit inside `{$IFDEF SYMBOL} ... {$ENDIF}` guards. Decls
+  present and identical on every target stay unguarded.
++
+With zero or one `--target` flag, output is byte-identical to a
+plain single-pass run — multi-target is strictly additive.
++
+Example: `--target WIN32:i686-w64-mingw32 --target WIN64:x86_64-w64-mingw32`.
+
+`--target-args <SYMBOL>=<ARGS>`::
+  Per-target clang flags appended (after `-target TRIPLE` and before
+  any `--` passthrough args) when parsing for `<SYMBOL>`. Use this
+  to give a Windows pass its mingw sysroot while keeping the Linux
+  pass on the host headers. Shell-style quoting (single or double
+  quotes) is honored; no `$VAR` expansion.
++
+Example: `--target-args 'WIN64=-isystem /usr/x86_64-w64-mingw32/include'`.
 
 == Exit codes
 

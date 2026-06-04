@@ -42,7 +42,7 @@ unit bindgen.emit.fpc;
 interface
 
 uses
-  Classes, SysUtils, bindgen.ir;
+  Classes, SysUtils, bindgen.ir, bindgen.merge;
 
 type
   TFpcEmitter = class
@@ -691,8 +691,12 @@ begin
   { Type decls dedup by name. libclang surfaces forward decls and
     their later completions as separate cursors with the same
     spelling (zlib's gzFile_s hits this); emit only once. }
-  if FEmittedTypes.IndexOf(D.Name) >= 0 then Exit;
-  FEmittedTypes.Add(D.Name);
+  { Dedup key includes the platform set so the merged-IR case can
+    emit two records of the same C name under different $IFDEF
+    guards. Single-target runs leave Platforms empty so the key
+    matches today's name-only behavior exactly. }
+  if FEmittedTypes.IndexOf(D.Name + '|' + D.Platforms.CommaText) >= 0 then Exit;
+  FEmittedTypes.Add(D.Name + '|' + D.Platforms.CommaText);
   if      D is TBindingRecord  then EmitRecord(TBindingRecord(D))
   else if D is TBindingEnum    then EmitEnum(TBindingEnum(D))
   else if D is TBindingTypedef then EmitTypedef(TBindingTypedef(D));
@@ -705,6 +709,7 @@ var
   HasTypes, HasFuncs, HasMacros: Boolean;
   J: Integer;
   EC: TBindingEnumConst;
+  StartIdx: Integer;
 begin
   FOutput.Clear;
   FEmittedTypes.Clear;
@@ -849,7 +854,11 @@ begin
       D := U.Decls.Items[I];
       if (not (D is TBindingFunction))
          and (not (D is TBindingMacroConst)) then
+      begin
+        StartIdx := FOutput.Count;
         EmitDecl(D);
+        WrapPlatformGuard(FOutput, U.Targets, D.Platforms, StartIdx, '{$', '}');
+      end;
     end;
     Line;
   end;
@@ -900,7 +909,12 @@ begin
     for I := 0 to U.Decls.Count - 1 do
     begin
       D := U.Decls.Items[I];
-      if D is TBindingFunction then EmitDecl(D);
+      if D is TBindingFunction then
+      begin
+        StartIdx := FOutput.Count;
+        EmitDecl(D);
+        WrapPlatformGuard(FOutput, U.Targets, D.Platforms, StartIdx, '{$', '}');
+      end;
     end;
     Line;
   end;

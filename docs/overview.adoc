@@ -69,6 +69,36 @@ dump). If the dialects diverge on a given construct, the divergence
 lives in the emitter — the parser and intermediate model are
 dialect-neutral.
 
+== Multi-target output
+
+A single run can emit `{$IFDEF}`-gated bindings for multiple clang
+targets at once. Each `--target SYMBOL:TRIPLE` adds one independent
+parse pass; per-target clang flags go on `--target-args SYMBOL=...`.
+The IRs are merged: decls identical across every pass emit
+unguarded, divergent decls emit once per variant under the
+appropriate `{$IFDEF SYMBOL}` block.
+
+[source,shell]
+----
+./target/pascal_bindgen --fpc --header foo.h --output foo.pas \
+    --target UNIX:x86_64-pc-linux-gnu \
+    --target WINDOWS:x86_64-w64-mingw32 \
+    --target-args 'WINDOWS=-isystem /usr/x86_64-w64-mingw32/include'
+----
+
+Win32 vs Win64 works the same way (`--target WIN32:i686-w64-mingw32
+--target WIN64:x86_64-w64-mingw32`). In practice the visible
+divergence on a Win32/Win64 split is narrower than you might expect,
+because FPC's `ctypes` (`clong`, `Pointer`, etc.) already resize per
+target — only typedef chains that resolve to *primitives of
+different width* produce IFDEF'd output. Calling-convention
+divergence (e.g. `WINAPI` = stdcall on i386, ignored on x64) is not
+yet captured: the parser hardcodes `cdecl` pending a `CXCallingConv`
+FFI shim.
+
+With zero or one `--target`, the output is byte-identical to the
+single-pass legacy path — multi-target is strictly additive.
+
 == Architecture (planned)
 
 [source]

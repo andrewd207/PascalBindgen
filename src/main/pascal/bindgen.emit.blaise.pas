@@ -39,7 +39,7 @@ unit bindgen.emit.blaise;
 interface
 
 uses
-  Classes, SysUtils, bindgen.ir, bindgen.parser;
+  Classes, SysUtils, bindgen.ir, bindgen.parser, bindgen.merge;
 
 type
   TBlaiseEmitter = class
@@ -742,8 +742,11 @@ begin
   if (D is TBindingTypedef)
      and (LowerCase(MapType(TBindingTypedef(D).Aliased)) = LowerCase(D.Name)) then
     Exit;
-  if FEmittedTypes.IndexOf(D.Name) >= 0 then Exit;
-  FEmittedTypes.Add(D.Name);
+  { Dedup key folds in the platform set so the merged-IR case can
+    emit same-name variants under different $IFDEF guards. Single-
+    target runs leave Platforms empty, preserving today's behavior. }
+  if FEmittedTypes.IndexOf(D.Name + '|' + D.Platforms.CommaText) >= 0 then Exit;
+  FEmittedTypes.Add(D.Name + '|' + D.Platforms.CommaText);
   if      D is TBindingRecord  then EmitRecord(TBindingRecord(D))
   else if D is TBindingEnum    then EmitEnum(TBindingEnum(D))
   else if D is TBindingTypedef then EmitTypedef(TBindingTypedef(D));
@@ -755,6 +758,7 @@ var
   D: TBindingDecl;
   HasTypes, HasFuncs, HasMacros: Boolean;
   EC: TBindingEnumConst;
+  StartIdx: Integer;
 begin
   FOutput.Clear;
   FEmittedTypes.Clear;
@@ -854,7 +858,11 @@ begin
       D := U.Decls.Items[I];
       if (not (D is TBindingFunction))
          and (not (D is TBindingMacroConst)) then
+      begin
+        StartIdx := FOutput.Count;
         EmitDecl(D);
+        WrapPlatformGuard(FOutput, U.Targets, D.Platforms, StartIdx, '{$', '}');
+      end;
     end;
     Line;
   end;
@@ -908,7 +916,12 @@ begin
     for I := 0 to U.Decls.Count - 1 do
     begin
       D := U.Decls.Items[I];
-      if D is TBindingFunction then EmitDecl(D);
+      if D is TBindingFunction then
+      begin
+        StartIdx := FOutput.Count;
+        EmitDecl(D);
+        WrapPlatformGuard(FOutput, U.Targets, D.Platforms, StartIdx, '{$', '}');
+      end;
     end;
     Line;
   end;
