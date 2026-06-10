@@ -7,20 +7,21 @@
   Licensed under the BSD-3-Clause License. See LICENSE file for details.
 }
 
-{ clang.wrap — Pascal-friendly OO wrappers around the shim FFI.
+{ clang.wrap — Pascal-friendly OO wrappers around the libclang FFI.
+
+  Holds CXCursor / CXType by value inside each wrapper object; the
+  underlying CXTranslationUnit keeps the backing AST alive, so we
+  just need to copy the small 16/32-byte handle records into our
+  fields.
 
   Dual-build notes (FPC + Blaise)
   --------------------------------
   * Blaise does not parse forward class declarations in any spelling,
     so the class order is hand-arranged: TClangType is declared before
-    TClangCursor, and TClangCursor.Declaration (Type -> Cursor) is
-    intentionally absent. Cursor -> Type methods stay on TClangCursor
-    because TClangType is already known by then.
+    TClangCursor.
   * Blaise does not parse `class function` (records with `static;`),
-    so the kind-id holders are plain records-with-fields and a
-    unit-level `var TClangKinds: TClangKindIds;` shim preserves the
-    `TClangKinds.FunctionDecl` syntax at call sites. Initialized in the
-    unit's `initialization` section. }
+    so kind-id holders are plain records-with-fields, populated in
+    the unit's `initialization` section. }
 unit clang.wrap;
 
 {$IFDEF FPC}
@@ -37,15 +38,14 @@ type
 
   TClangType = class
   private
-    FHandle: PPbgType;
+    FHandle: CXType;
   public
-    constructor Create(AHandle: PPbgType);
-    destructor Destroy; override;
+    constructor Create(const AHandle: CXType);
     function Kind: Integer;
     function Spelling: string;
     function IsConstQualified: Boolean;
     function IsVariadic: Boolean;
-    function Pointee: TClangType;       { nil if not a pointer }
+    function Pointee: TClangType;       { kind = Invalid if not a pointer }
     function Canonical: TClangType;
     function ArrayElement: TClangType;
     function ArraySize: Int64;          { -1 if not a constant-size array }
@@ -57,11 +57,9 @@ type
 
   TClangCursor = class
   private
-    FHandle: PPbgCursor;
-    FOwned: Boolean;
+    FHandle: CXCursor;
   public
-    constructor Create(AHandle: PPbgCursor; AOwned: Boolean = True);
-    destructor Destroy; override;
+    constructor Create(const AHandle: CXCursor);
     function Kind: Integer;
     function KindSpelling: string;
     function Spelling: string;
@@ -124,9 +122,9 @@ type
 
   TClangTranslationUnit = class
   private
-    FHandle: PPbgTU;
+    FHandle: CXTranslationUnit;
   public
-    constructor Create(AHandle: PPbgTU);
+    constructor Create(AHandle: CXTranslationUnit);
     destructor Destroy; override;
     function RootCursor: TClangCursor;
     function DiagnosticCount: Cardinal;
@@ -135,7 +133,7 @@ type
 
   TClangIndex = class
   private
-    FHandle: PPbgIndex;
+    FHandle: CXIndex;
   public
     constructor Create(ExcludePCH: Boolean; DisplayDiag: Boolean);
     destructor Destroy; override;
@@ -148,48 +146,45 @@ type
   end;
 
 var
-  { Field-of-var sugar so call sites read `TClangKinds.FunctionDecl`.
-    Populated in the initialization block below. }
+  { Field-of-var sugar so call sites read `TClangKinds.FunctionDecl`. }
   TClangKinds: TClangKindIds;
   TClangTypeKinds: TClangTypeKindIds;
 
-function CStrOrEmpty(P: PChar): string;
-
-{ Cursor -> child-cursors. Lives as a unit-level helper rather than a
-  method because Blaise rejects forward class declarations, and a
-  method returning TClangCursorArray would require one. }
+{ Cursor -> direct child cursors. Snapshots into an array. Lives as a
+  unit-level helper rather than a method because Blaise rejects
+  forward class declarations, and a method returning TClangCursorArray
+  would require one. }
 function CursorChildren(C: TClangCursor): TClangCursorArray;
 
 implementation
-
-function CStrOrEmpty(P: PChar): string;
-begin
-  if P = nil then Result := '' else Result := string(P);
-end;
 
 { TClangIndex }
 
 constructor TClangIndex.Create(ExcludePCH, DisplayDiag: Boolean);
 begin
   inherited Create;
-  FHandle := pbg_index_create(Ord(ExcludePCH), Ord(DisplayDiag));
+  FHandle := clang_createIndex(Ord(ExcludePCH), Ord(DisplayDiag));
   if FHandle = nil then
-    raise EClangError.Create('pbg_index_create failed');
+    raise EClangError.Create('clang_createIndex failed');
 end;
 
 destructor TClangIndex.Destroy;
 begin
-  if FHandle <> nil then pbg_index_dispose(FHandle);
+  if FHandle <> nil then clang_disposeIndex(FHandle);
   inherited Destroy;
 end;
 
 function TClangIndex.Parse(const FileName: string;
                            const ExtraArgs: array of string): TClangTranslationUnit;
+const
+  ParseFlags = CXTranslationUnit_SkipFunctionBodies or
+               CXTranslationUnit_DetailedPreprocessingRecord;
 var
   argv: array of PChar;
   i, n: Integer;
   rc: cint;
-  tu: PPbgTU;
+  tu: CXTranslationUnit;
+  argp: PPChar;
 begin
   n := Length(ExtraArgs);
   SetLength(argv, n);
@@ -197,12 +192,14 @@ begin
     argv[i] := PChar(ExtraArgs[i]);
   tu := nil;
   if n = 0 then
-    rc := pbg_parse_tu(FHandle, PChar(FileName), nil, 0, @tu)
+    argp := nil
   else
-    rc := pbg_parse_tu(FHandle, PChar(FileName), PPCharArray(Pointer(argv)), n, @tu);
-  if rc <> 0 then
-    { Use Format + Create instead of CreateFmt: Blaise's Exception
-      has no CreateFmt overload, but Format itself works. }
+    argp := PPChar(Pointer(argv));
+  rc := clang_parseTranslationUnit2(
+    FHandle, PChar(FileName), argp, n, nil, 0, ParseFlags, @tu);
+  if rc <> CXError_Success then
+    { Use Format + Create instead of CreateFmt for Blaise compatibility
+      with older snapshots; harmless on newer ones. }
     raise EClangError.Create(Format(
       'parseTranslationUnit failed (CXErrorCode=%d) for "%s"',
       [rc, FileName]));
@@ -210,13 +207,17 @@ begin
 end;
 
 function TClangIndex.ParseNoArgs(const FileName: string): TClangTranslationUnit;
+const
+  ParseFlags = CXTranslationUnit_SkipFunctionBodies or
+               CXTranslationUnit_DetailedPreprocessingRecord;
 var
   rc: cint;
-  tu: PPbgTU;
+  tu: CXTranslationUnit;
 begin
   tu := nil;
-  rc := pbg_parse_tu(FHandle, PChar(FileName), nil, 0, @tu);
-  if rc <> 0 then
+  rc := clang_parseTranslationUnit2(
+    FHandle, PChar(FileName), nil, 0, nil, 0, ParseFlags, @tu);
+  if rc <> CXError_Success then
     raise EClangError.Create(Format(
       'parseTranslationUnit failed (CXErrorCode=%d) for "%s"',
       [rc, FileName]));
@@ -225,7 +226,7 @@ end;
 
 { TClangTranslationUnit }
 
-constructor TClangTranslationUnit.Create(AHandle: PPbgTU);
+constructor TClangTranslationUnit.Create(AHandle: CXTranslationUnit);
 begin
   inherited Create;
   FHandle := AHandle;
@@ -233,267 +234,314 @@ end;
 
 destructor TClangTranslationUnit.Destroy;
 begin
-  if FHandle <> nil then pbg_tu_dispose(FHandle);
+  if FHandle <> nil then clang_disposeTranslationUnit(FHandle);
   inherited Destroy;
 end;
 
 function TClangTranslationUnit.RootCursor: TClangCursor;
 begin
-  Result := TClangCursor.Create(pbg_tu_cursor(FHandle));
+  Result := TClangCursor.Create(clang_getTranslationUnitCursor(FHandle));
 end;
 
 function TClangTranslationUnit.DiagnosticCount: Cardinal;
 begin
-  Result := pbg_tu_num_diagnostics(FHandle);
+  Result := clang_getNumDiagnostics(FHandle);
 end;
 
 function TClangTranslationUnit.Diagnostic(I: Cardinal): string;
 var
-  P: PChar;
+  d: CXDiagnostic;
 begin
-  P := pbg_tu_diagnostic(FHandle, I);
-  Result := CStrOrEmpty(P);
-  if P <> nil then pbg_free_string(P);
+  d := clang_getDiagnostic(FHandle, I);
+  Result := CXStringToStr(clang_formatDiagnostic(d, clang_defaultDiagnosticDisplayOptions));
+  clang_disposeDiagnostic(d);
 end;
 
 { TClangCursor }
 
-constructor TClangCursor.Create(AHandle: PPbgCursor; AOwned: Boolean);
+constructor TClangCursor.Create(const AHandle: CXCursor);
 begin
   inherited Create;
   FHandle := AHandle;
-  FOwned := AOwned;
-end;
-
-destructor TClangCursor.Destroy;
-begin
-  if FOwned and (FHandle <> nil) then pbg_cursor_dispose(FHandle);
-  inherited Destroy;
 end;
 
 function TClangCursor.Kind: Integer;
 begin
-  Result := pbg_cursor_kind(FHandle);
+  Result := clang_getCursorKind(FHandle);
 end;
 
 function TClangCursor.KindSpelling: string;
-var
-  P: PChar;
 begin
-  P := pbg_kind_spelling(Kind);
-  Result := CStrOrEmpty(P);
-  if P <> nil then pbg_free_string(P);
+  Result := CXStringToStr(clang_getCursorKindSpelling(Kind));
 end;
 
 function TClangCursor.Spelling: string;
-var
-  P: PChar;
 begin
-  P := pbg_cursor_spelling(FHandle);
-  Result := CStrOrEmpty(P);
-  if P <> nil then pbg_free_string(P);
+  Result := CXStringToStr(clang_getCursorSpelling(FHandle));
 end;
 
 procedure TClangCursor.Location(out FileName: string; out Line, Col: Cardinal);
 var
-  P: PChar;
-  L, C: Cardinal;
+  loc: CXSourceLocation;
+  f: CXFile;
+  l, c, off: Cardinal;
 begin
-  { Stage through locals because Blaise's codegen rejects taking the
-    address of an out-parameter ("Unsupported L-value form for var
-    argument"). }
-  P := nil;
-  L := 0;
-  C := 0;
-  pbg_cursor_location(FHandle, @P, @L, @C);
-  FileName := CStrOrEmpty(P);
-  if P <> nil then pbg_free_string(P);
-  Line := L;
-  Col := C;
+  { Stage through locals because earlier Blaise codegen rejected
+    taking the address of an out-parameter. The newer compiler
+    accepts it, but the staged form costs nothing and keeps the
+    dual-build clean. }
+  l := 0; c := 0; off := 0; f := nil;
+  loc := clang_getCursorLocation(FHandle);
+  clang_getFileLocation(loc, @f, @l, @c, @off);
+  if f <> nil then
+    FileName := CXStringToStr(clang_getFileName(f))
+  else
+    FileName := '';
+  Line := l;
+  Col := c;
 end;
 
 function TClangCursor.InMainFile: Boolean;
 begin
-  Result := pbg_cursor_in_main_file(FHandle) <> 0;
+  Result := clang_Location_isFromMainFile(clang_getCursorLocation(FHandle)) <> 0;
 end;
 
 function TClangCursor.InSystemHeader: Boolean;
 begin
-  Result := pbg_cursor_in_system_header(FHandle) <> 0;
+  Result := clang_Location_isInSystemHeader(clang_getCursorLocation(FHandle)) <> 0;
 end;
 
 function TClangCursor.TypeOf: TClangType;
 begin
-  Result := TClangType.Create(pbg_cursor_type(FHandle));
+  Result := TClangType.Create(clang_getCursorType(FHandle));
 end;
 
 function TClangCursor.TypedefUnderlying: TClangType;
 begin
-  Result := TClangType.Create(pbg_cursor_typedef_underlying(FHandle));
+  Result := TClangType.Create(clang_getTypedefDeclUnderlyingType(FHandle));
 end;
 
 function TClangCursor.EnumIntegerType: TClangType;
 begin
-  Result := TClangType.Create(pbg_cursor_enum_integer_type(FHandle));
+  Result := TClangType.Create(clang_getEnumDeclIntegerType(FHandle));
 end;
 
 function TClangCursor.EnumConstantValue: Int64;
 begin
-  Result := pbg_cursor_enum_constant_value(FHandle);
+  Result := clang_getEnumConstantDeclValue(FHandle);
 end;
 
 function TClangCursor.FieldBitWidth: Integer;
 begin
-  Result := pbg_cursor_field_bit_width(FHandle);
+  Result := clang_getFieldDeclBitWidth(FHandle);
 end;
 
 function TClangCursor.RawComment: string;
-var
-  P: PChar;
 begin
-  P := pbg_cursor_raw_comment(FHandle);
-  Result := CStrOrEmpty(P);
-  if P <> nil then pbg_free_string(P);
+  Result := CXStringToStr(clang_Cursor_getRawCommentText(FHandle));
 end;
 
 function TClangCursor.MacroBody: string;
 var
-  P: PChar;
+  tu: CXTranslationUnit;
+  range: CXSourceRange;
+  tokens: PCXToken;
+  ntok: Cardinal;
+  i: Cardinal;
+  tok: CXToken;
+  spelling: string;
+  parts: TStringList;
+  ptok: PCXToken;
+  offset: PtrUInt;
 begin
-  P := pbg_cursor_macro_body(FHandle);
-  Result := CStrOrEmpty(P);
-  if P <> nil then pbg_free_string(P);
-end;
-
-function CursorChildren(C: TClangCursor): TClangCursorArray;
-var
-  L: PPbgCursorList;
-  n, i: Integer;
-begin
-  L := pbg_cursor_children(C.FHandle);
-  n := pbg_children_count(L);
-  SetLength(Result, n);
-  for i := 0 to n - 1 do
-    Result[i] := TClangCursor.Create(pbg_children_get(L, i));
-  pbg_children_dispose(L);
+  Result := '';
+  if clang_Cursor_isMacroFunctionLike(FHandle) <> 0 then Exit;
+  tu := clang_Cursor_getTranslationUnit(FHandle);
+  range := clang_getCursorExtent(FHandle);
+  tokens := nil;
+  ntok := 0;
+  clang_tokenize(tu, range, @tokens, @ntok);
+  if ntok <= 1 then
+  begin
+    if tokens <> nil then clang_disposeTokens(tu, tokens, ntok);
+    Exit;
+  end;
+  parts := TStringList.Create;
+  try
+    { Skip the first token (the macro name itself). Walk tokens by
+      pointer arithmetic on raw bytes to stay portable across Pascal
+      dialects — Blaise rejects `[]` indexing on typed pointers, and
+      the FPC array-of-T pointer form differs subtly. }
+    for i := 1 to ntok - 1 do
+    begin
+      offset := PtrUInt(i) * SizeOf(CXToken);
+      ptok := PCXToken(PtrUInt(tokens) + offset);
+      tok := ptok^;
+      spelling := CXStringToStr(clang_getTokenSpelling(tu, tok));
+      parts.Add(spelling);
+    end;
+    { Join with LF, matching the shim's behavior. }
+    Result := parts.Text;
+    { TStringList.Text appends a trailing newline; strip it. }
+    if (Result <> '') and (Result[Length(Result)] = #10) then
+      SetLength(Result, Length(Result) - 1);
+  finally
+    parts.Free;
+  end;
+  clang_disposeTokens(tu, tokens, ntok);
 end;
 
 { TClangType }
 
-constructor TClangType.Create(AHandle: PPbgType);
+constructor TClangType.Create(const AHandle: CXType);
 begin
   inherited Create;
   FHandle := AHandle;
 end;
 
-destructor TClangType.Destroy;
-begin
-  if FHandle <> nil then pbg_type_dispose(FHandle);
-  inherited Destroy;
-end;
-
 function TClangType.Kind: Integer;
 begin
-  Result := pbg_type_kind(FHandle);
+  Result := FHandle.kind;
 end;
 
 function TClangType.Spelling: string;
-var
-  P: PChar;
 begin
-  P := pbg_type_spelling(FHandle);
-  Result := CStrOrEmpty(P);
-  if P <> nil then pbg_free_string(P);
+  Result := CXStringToStr(clang_getTypeSpelling(FHandle));
 end;
 
 function TClangType.IsConstQualified: Boolean;
 begin
-  Result := pbg_type_is_const_qualified(FHandle) <> 0;
+  Result := clang_isConstQualifiedType(FHandle) <> 0;
 end;
 
 function TClangType.IsVariadic: Boolean;
 begin
-  Result := pbg_type_is_variadic(FHandle) <> 0;
+  Result := clang_isFunctionTypeVariadic(FHandle) <> 0;
 end;
 
 function TClangType.Pointee: TClangType;
 begin
-  Result := TClangType.Create(pbg_type_pointee(FHandle));
+  Result := TClangType.Create(clang_getPointeeType(FHandle));
 end;
 
 function TClangType.Canonical: TClangType;
 begin
-  Result := TClangType.Create(pbg_type_canonical(FHandle));
+  Result := TClangType.Create(clang_getCanonicalType(FHandle));
 end;
 
 function TClangType.ArrayElement: TClangType;
 begin
-  Result := TClangType.Create(pbg_type_array_element(FHandle));
+  Result := TClangType.Create(clang_getArrayElementType(FHandle));
 end;
 
 function TClangType.ArraySize: Int64;
 begin
-  Result := pbg_type_array_size(FHandle);
+  Result := clang_getArraySize(FHandle);
 end;
 
 function TClangType.SizeOf: Int64;
 begin
-  Result := pbg_type_size_of(FHandle);
+  Result := clang_Type_getSizeOf(FHandle);
 end;
 
 function TClangType.ResultType: TClangType;
 begin
-  Result := TClangType.Create(pbg_type_result(FHandle));
+  Result := TClangType.Create(clang_getResultType(FHandle));
 end;
 
 function TClangType.NumArgs: Integer;
 begin
-  Result := pbg_type_num_args(FHandle);
+  Result := clang_getNumArgTypes(FHandle);
 end;
 
 function TClangType.Arg(I: Integer): TClangType;
 begin
-  Result := TClangType.Create(pbg_type_arg(FHandle, I));
+  Result := TClangType.Create(clang_getArgType(FHandle, cuint(I)));
+end;
+
+{ Child enumeration.
+
+  clang_visitChildren takes a callback receiving CXCursor by value.
+  We accumulate raw handles into a dynamic array and let the caller
+  wrap them in TClangCursor instances. The CXClientData payload is
+  a pointer to a heap-allocated list record so the callback can
+  mutate the array. }
+
+type
+  TCursorBuf = record
+    items: array of CXCursor;
+    count: Integer;
+  end;
+  PCursorBuf = ^TCursorBuf;
+
+function ChildVisitor(cursor, parent: CXCursor; data: CXClientData): cint; cdecl;
+var
+  buf: PCursorBuf;
+begin
+  buf := PCursorBuf(data);
+  if buf^.count >= Length(buf^.items) then
+  begin
+    if Length(buf^.items) = 0 then
+      SetLength(buf^.items, 16)
+    else
+      SetLength(buf^.items, Length(buf^.items) * 2);
+  end;
+  buf^.items[buf^.count] := cursor;
+  Inc(buf^.count);
+  Result := CXChildVisit_Continue;
+end;
+
+function CursorChildren(C: TClangCursor): TClangCursorArray;
+var
+  buf: TCursorBuf;
+  i: Integer;
+begin
+  buf.count := 0;
+  SetLength(buf.items, 0);
+  clang_visitChildren(C.FHandle, ChildVisitor, @buf);
+  SetLength(Result, buf.count);
+  for i := 0 to buf.count - 1 do
+    Result[i] := TClangCursor.Create(buf.items[i]);
 end;
 
 initialization
-  TClangKinds.FunctionDecl := pbg_kind_function_decl;
-  TClangKinds.StructDecl   := pbg_kind_struct_decl;
-  TClangKinds.UnionDecl    := pbg_kind_union_decl;
-  TClangKinds.EnumDecl     := pbg_kind_enum_decl;
-  TClangKinds.EnumConstant := pbg_kind_enum_constant;
-  TClangKinds.TypedefDecl  := pbg_kind_typedef_decl;
-  TClangKinds.FieldDecl    := pbg_kind_field_decl;
-  TClangKinds.MacroDef     := pbg_kind_macro_def;
-  TClangKinds.ParmDecl     := pbg_kind_parm_decl;
-  TClangKinds.VarDecl      := pbg_kind_var_decl;
+  TClangKinds.FunctionDecl := CXCursor_FunctionDecl;
+  TClangKinds.StructDecl   := CXCursor_StructDecl;
+  TClangKinds.UnionDecl    := CXCursor_UnionDecl;
+  TClangKinds.EnumDecl     := CXCursor_EnumDecl;
+  TClangKinds.EnumConstant := CXCursor_EnumConstantDecl;
+  TClangKinds.TypedefDecl  := CXCursor_TypedefDecl;
+  TClangKinds.FieldDecl    := CXCursor_FieldDecl;
+  TClangKinds.MacroDef     := CXCursor_MacroDefinition;
+  TClangKinds.ParmDecl     := CXCursor_ParmDecl;
+  TClangKinds.VarDecl      := CXCursor_VarDecl;
 
-  TClangTypeKinds.Invalid         := pbg_typekind_invalid;
-  TClangTypeKinds.Void            := pbg_typekind_void;
-  TClangTypeKinds.Bool            := pbg_typekind_bool;
-  TClangTypeKinds.CharS           := pbg_typekind_char_s;
-  TClangTypeKinds.CharU           := pbg_typekind_char_u;
-  TClangTypeKinds.SChar           := pbg_typekind_schar;
-  TClangTypeKinds.UChar           := pbg_typekind_uchar;
-  TClangTypeKinds.Short           := pbg_typekind_short;
-  TClangTypeKinds.UShort          := pbg_typekind_ushort;
-  TClangTypeKinds.Int             := pbg_typekind_int;
-  TClangTypeKinds.UInt            := pbg_typekind_uint;
-  TClangTypeKinds.Long            := pbg_typekind_long;
-  TClangTypeKinds.ULong           := pbg_typekind_ulong;
-  TClangTypeKinds.LongLong        := pbg_typekind_longlong;
-  TClangTypeKinds.ULongLong       := pbg_typekind_ulonglong;
-  TClangTypeKinds.Float           := pbg_typekind_float;
-  TClangTypeKinds.Double          := pbg_typekind_double;
-  TClangTypeKinds.LongDouble      := pbg_typekind_longdouble;
-  TClangTypeKinds.Pointer_        := pbg_typekind_pointer;
-  TClangTypeKinds.Record_         := pbg_typekind_record;
-  TClangTypeKinds.Enum            := pbg_typekind_enum;
-  TClangTypeKinds.Typedef         := pbg_typekind_typedef;
-  TClangTypeKinds.ConstantArray   := pbg_typekind_constantarray;
-  TClangTypeKinds.IncompleteArray := pbg_typekind_incompletearray;
-  TClangTypeKinds.FunctionProto   := pbg_typekind_functionproto;
-  TClangTypeKinds.FunctionNoProto := pbg_typekind_functionnoproto;
-  TClangTypeKinds.Elaborated      := pbg_typekind_elaborated;
+  TClangTypeKinds.Invalid         := CXType_Invalid;
+  TClangTypeKinds.Void            := CXType_Void;
+  TClangTypeKinds.Bool            := CXType_Bool;
+  TClangTypeKinds.CharS           := CXType_Char_S;
+  TClangTypeKinds.CharU           := CXType_Char_U;
+  TClangTypeKinds.SChar           := CXType_SChar;
+  TClangTypeKinds.UChar           := CXType_UChar;
+  TClangTypeKinds.Short           := CXType_Short;
+  TClangTypeKinds.UShort          := CXType_UShort;
+  TClangTypeKinds.Int             := CXType_Int;
+  TClangTypeKinds.UInt            := CXType_UInt;
+  TClangTypeKinds.Long            := CXType_Long;
+  TClangTypeKinds.ULong           := CXType_ULong;
+  TClangTypeKinds.LongLong        := CXType_LongLong;
+  TClangTypeKinds.ULongLong       := CXType_ULongLong;
+  TClangTypeKinds.Float           := CXType_Float;
+  TClangTypeKinds.Double          := CXType_Double;
+  TClangTypeKinds.LongDouble      := CXType_LongDouble;
+  TClangTypeKinds.Pointer_        := CXType_Pointer;
+  TClangTypeKinds.Record_         := CXType_Record;
+  TClangTypeKinds.Enum            := CXType_Enum;
+  TClangTypeKinds.Typedef         := CXType_Typedef;
+  TClangTypeKinds.ConstantArray   := CXType_ConstantArray;
+  TClangTypeKinds.IncompleteArray := CXType_IncompleteArray;
+  TClangTypeKinds.FunctionProto   := CXType_FunctionProto;
+  TClangTypeKinds.FunctionNoProto := CXType_FunctionNoProto;
+  TClangTypeKinds.Elaborated      := CXType_Elaborated;
 
 end.

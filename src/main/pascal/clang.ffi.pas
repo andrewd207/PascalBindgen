@@ -7,10 +7,20 @@
   Licensed under the BSD-3-Clause License. See LICENSE file for details.
 }
 
-{ clang.ffi — flat Pascal externals matching libclang_shim.c.
+{ clang.ffi — direct libclang externs.
 
-  Everything here is a pointer or a scalar; no records by value.
-  Use clang.wrap for an ergonomic OO surface. }
+  libclang exposes CXCursor/CXType/CXString by value across most of
+  its API. We declare matching Pascal records and let the compiler's
+  SysV-ABI lowering split/recombine them across calls. Used to need
+  a C shim (libclang_shim.c) because earlier Blaise didn't lower
+  aggregates correctly; the LLVM backend now does. FPC has always
+  been fine here.
+
+  Naming follows libclang's C names so call sites read like the C
+  reference. Lifetime rules match libclang's: CXString must be freed
+  with clang_disposeString; CXIndex/CXTranslationUnit/CXDiagnostic/
+  CXToken arrays have their own dispose calls. clang.wrap wraps all
+  of this so consumers don't have to think about it. }
 unit clang.ffi;
 
 {$IFDEF FPC}
@@ -23,113 +33,248 @@ uses
   bindgen.compat;
 
 type
-  PPbgIndex      = Pointer;
-  PPbgTU         = Pointer;
-  PPbgCursor     = Pointer;
-  PPbgCursorList = Pointer;
-  PPbgType       = Pointer;
+  CXIndex            = Pointer;
+  CXTranslationUnit  = Pointer;
+  CXDiagnostic       = Pointer;
+  CXFile             = Pointer;
+  CXClientData       = Pointer;
 
-  PPbgTUPtr = ^PPbgTU;
+  PCXTranslationUnit = ^CXTranslationUnit;
+  PCXFile            = ^CXFile;
+  PCardinal          = ^Cardinal;
 
-  PPCharArray = ^PChar;
-  PPChar      = ^PChar;
-  PCardinal   = ^Cardinal;
+  { 16 bytes; SysV INTEGER+INTEGER -> returned in RAX:RDX, passed in
+    two integer registers. }
+  CXString = record
+    data:          Pointer;
+    private_flags: Cardinal;
+  end;
 
-{ index }
-function pbg_index_create(exclude_pch, display_diag: cint): PPbgIndex; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_index_create';
-procedure pbg_index_dispose(p: PPbgIndex); {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_index_dispose';
+  { 32 bytes; SysV memory class -> sret on return, by-ref on pass. }
+  CXCursor = record
+    kind:    cint;
+    xdata:   cint;
+    data0:   Pointer;
+    data1:   Pointer;
+    data2:   Pointer;
+  end;
 
-{ translation unit }
-function pbg_parse_tu(p: PPbgIndex; filename: PChar; args: PPCharArray; nargs: cint; out_tu: PPbgTUPtr): cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_parse_tu';
-procedure pbg_tu_dispose(p: PPbgTU); {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_tu_dispose';
-function pbg_tu_num_diagnostics(p: PPbgTU): Cardinal; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_tu_num_diagnostics';
-function pbg_tu_diagnostic(p: PPbgTU; i: Cardinal): PChar; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_tu_diagnostic';
+  { 16 bytes total: kind(int) + pad(int) + data[2]. The two-pointer
+    payload makes it INTEGER+SSE-class-ish in places; libclang treats
+    it as a plain by-value aggregate and the SysV classifier puts it
+    in MEMORY because the first 8 bytes mix int+ptr. Either way,
+    LLVM's aggregate lowering handles it. }
+  CXType = record
+    kind:  cint;
+    pad:   cint;
+    data0: Pointer;
+    data1: Pointer;
+  end;
 
-{ cursor }
-function pbg_tu_cursor(p: PPbgTU): PPbgCursor; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_tu_cursor';
-procedure pbg_cursor_dispose(p: PPbgCursor); {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_cursor_dispose';
-function pbg_cursor_kind(p: PPbgCursor): cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_cursor_kind';
-function pbg_cursor_spelling(p: PPbgCursor): PChar; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_cursor_spelling';
-function pbg_kind_spelling(kind: cint): PChar; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_kind_spelling';
-procedure pbg_cursor_location(p: PPbgCursor; out_file: PPChar; out_line, out_col: PCardinal); {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_cursor_location';
+  CXSourceLocation = record
+    ptr_data0: Pointer;
+    ptr_data1: Pointer;
+    int_data:  Cardinal;
+  end;
 
-function pbg_cursor_in_main_file(p: PPbgCursor): cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_cursor_in_main_file';
-function pbg_cursor_in_system_header(p: PPbgCursor): cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_cursor_in_system_header';
-function pbg_cursor_raw_comment(p: PPbgCursor): PChar; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_cursor_raw_comment';
-function pbg_cursor_macro_body(p: PPbgCursor): PChar; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_cursor_macro_body';
+  CXSourceRange = record
+    ptr_data0:           Pointer;
+    ptr_data1:           Pointer;
+    begin_int_data:      Cardinal;
+    end_int_data:        Cardinal;
+  end;
 
-{ stable cursor-kind constants (queried at runtime, not hardcoded) }
-function pbg_kind_function_decl: cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_kind_function_decl';
-function pbg_kind_struct_decl:   cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_kind_struct_decl';
-function pbg_kind_union_decl:    cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_kind_union_decl';
-function pbg_kind_enum_decl:     cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_kind_enum_decl';
-function pbg_kind_enum_constant: cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_kind_enum_constant';
-function pbg_kind_typedef_decl:  cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_kind_typedef_decl';
-function pbg_kind_field_decl:    cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_kind_field_decl';
-function pbg_kind_macro_def:     cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_kind_macro_def';
-function pbg_kind_parm_decl:     cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_kind_parm_decl';
-function pbg_kind_var_decl:      cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_kind_var_decl';
+  CXToken = record
+    int_data: array [0..3] of Cardinal;
+    ptr_data: Pointer;
+  end;
+  PCXToken = ^CXToken;
+  PPCXToken = ^PCXToken;
 
-{ types }
-function pbg_cursor_type(p: PPbgCursor): PPbgType; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_cursor_type';
-function pbg_cursor_typedef_underlying(p: PPbgCursor): PPbgType; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_cursor_typedef_underlying';
-function pbg_cursor_enum_integer_type(p: PPbgCursor): PPbgType; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_cursor_enum_integer_type';
-function pbg_cursor_enum_constant_value(p: PPbgCursor): cint64; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_cursor_enum_constant_value';
-function pbg_cursor_field_bit_width(p: PPbgCursor): cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_cursor_field_bit_width';
+  { CXChildVisitResult. }
+const
+  CXChildVisit_Break    = 0;
+  CXChildVisit_Continue = 1;
+  CXChildVisit_Recurse  = 2;
 
-procedure pbg_type_dispose(p: PPbgType); {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_type_dispose';
-function pbg_type_kind(p: PPbgType): cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_type_kind';
-function pbg_type_spelling(p: PPbgType): PChar; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_type_spelling';
-function pbg_type_is_const_qualified(p: PPbgType): cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_type_is_const_qualified';
-function pbg_type_pointee(p: PPbgType): PPbgType; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_type_pointee';
-function pbg_type_canonical(p: PPbgType): PPbgType; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_type_canonical';
-function pbg_type_array_element(p: PPbgType): PPbgType; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_type_array_element';
-function pbg_type_array_size(p: PPbgType): cint64; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_type_array_size';
-function pbg_type_size_of(p: PPbgType): cint64; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_type_size_of';
-function pbg_type_result(p: PPbgType): PPbgType; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_type_result';
-function pbg_type_num_args(p: PPbgType): cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_type_num_args';
-function pbg_type_arg(p: PPbgType; i: cint): PPbgType; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_type_arg';
-function pbg_type_is_variadic(p: PPbgType): cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_type_is_variadic';
-function pbg_type_declaration(p: PPbgType): PPbgCursor; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_type_declaration';
+type
+  CXCursorVisitor = function (cursor, parent: CXCursor; data: CXClientData): cint; cdecl;
 
-{ stable type-kind constants }
-function pbg_typekind_invalid:        cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_invalid';
-function pbg_typekind_void:           cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_void';
-function pbg_typekind_bool:           cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_bool';
-function pbg_typekind_char_s:         cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_char_s';
-function pbg_typekind_char_u:         cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_char_u';
-function pbg_typekind_schar:          cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_schar';
-function pbg_typekind_uchar:          cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_uchar';
-function pbg_typekind_short:          cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_short';
-function pbg_typekind_ushort:         cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_ushort';
-function pbg_typekind_int:            cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_int';
-function pbg_typekind_uint:           cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_uint';
-function pbg_typekind_long:           cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_long';
-function pbg_typekind_ulong:          cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_ulong';
-function pbg_typekind_longlong:       cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_longlong';
-function pbg_typekind_ulonglong:      cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_ulonglong';
-function pbg_typekind_float:          cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_float';
-function pbg_typekind_double:         cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_double';
-function pbg_typekind_longdouble:     cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_longdouble';
-function pbg_typekind_pointer:        cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_pointer';
-function pbg_typekind_record:         cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_record';
-function pbg_typekind_enum:           cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_enum';
-function pbg_typekind_typedef:        cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_typedef';
-function pbg_typekind_constantarray:  cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_constantarray';
-function pbg_typekind_incompletearray:cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_incompletearray';
-function pbg_typekind_functionproto:  cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_functionproto';
-function pbg_typekind_functionnoproto:cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_functionnoproto';
-function pbg_typekind_elaborated:     cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_typekind_elaborated';
+const
+  { CXTranslationUnit_Flags subset we need. }
+  CXTranslationUnit_SkipFunctionBodies            = $40;
+  CXTranslationUnit_DetailedPreprocessingRecord   = $01;
 
-{ child enumeration }
-function pbg_cursor_children(p: PPbgCursor): PPbgCursorList; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_cursor_children';
-function pbg_children_count(L: PPbgCursorList): cint; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_children_count';
-function pbg_children_get(L: PPbgCursorList; i: cint): PPbgCursor; {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_children_get';
-procedure pbg_children_dispose(L: PPbgCursorList); {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_children_dispose';
+  { CXErrorCode. }
+  CXError_Success = 0;
 
-{ string release }
-procedure pbg_free_string(s: PChar); {$IFDEF FPC}cdecl; {$ENDIF}external name 'pbg_free_string';
+  { CXCursorKind values used by the emitter. Stable across libclang
+    versions; lifted from clang-c/Index.h. }
+  CXCursor_StructDecl       = 2;
+  CXCursor_UnionDecl        = 3;
+  CXCursor_EnumDecl         = 5;
+  CXCursor_FieldDecl        = 6;
+  CXCursor_EnumConstantDecl = 7;
+  CXCursor_FunctionDecl     = 8;
+  CXCursor_VarDecl          = 9;
+  CXCursor_ParmDecl         = 10;
+  CXCursor_TypedefDecl      = 20;
+  CXCursor_MacroDefinition  = 501;
+
+  { CXTypeKind values. }
+  CXType_Invalid         = 0;
+  CXType_Void            = 2;
+  CXType_Bool            = 3;
+  CXType_Char_U          = 4;
+  CXType_UChar           = 5;
+  CXType_UShort          = 8;
+  CXType_UInt            = 9;
+  CXType_ULong           = 10;
+  CXType_ULongLong       = 11;
+  CXType_Char_S          = 13;
+  CXType_SChar           = 14;
+  CXType_Short           = 16;
+  CXType_Int             = 17;
+  CXType_Long            = 18;
+  CXType_LongLong        = 19;
+  CXType_Float           = 21;
+  CXType_Double          = 22;
+  CXType_LongDouble      = 23;
+  CXType_Pointer         = 101;
+  CXType_Record          = 105;
+  CXType_Enum            = 106;
+  CXType_Typedef         = 107;
+  CXType_ConstantArray   = 112;
+  CXType_IncompleteArray = 114;
+  CXType_FunctionNoProto = 110;
+  CXType_FunctionProto   = 111;
+  CXType_Elaborated      = 119;
+
+{ --- libclang externs --- }
+
+function clang_createIndex(excludeDeclarationsFromPCH, displayDiagnostics: cint): CXIndex;
+  cdecl; external name 'clang_createIndex';
+procedure clang_disposeIndex(idx: CXIndex);
+  cdecl; external name 'clang_disposeIndex';
+
+function clang_parseTranslationUnit2(
+    idx: CXIndex; source_filename: PChar;
+    command_line_args: PPChar; num_command_line_args: cint;
+    unsaved_files: Pointer; num_unsaved_files: cuint;
+    options: cuint; out_tu: PCXTranslationUnit): cint;
+  cdecl; external name 'clang_parseTranslationUnit2';
+procedure clang_disposeTranslationUnit(tu: CXTranslationUnit);
+  cdecl; external name 'clang_disposeTranslationUnit';
+function clang_getNumDiagnostics(tu: CXTranslationUnit): Cardinal;
+  cdecl; external name 'clang_getNumDiagnostics';
+function clang_getDiagnostic(tu: CXTranslationUnit; i: Cardinal): CXDiagnostic;
+  cdecl; external name 'clang_getDiagnostic';
+procedure clang_disposeDiagnostic(d: CXDiagnostic);
+  cdecl; external name 'clang_disposeDiagnostic';
+function clang_formatDiagnostic(d: CXDiagnostic; options: Cardinal): CXString;
+  cdecl; external name 'clang_formatDiagnostic';
+function clang_defaultDiagnosticDisplayOptions: Cardinal;
+  cdecl; external name 'clang_defaultDiagnosticDisplayOptions';
+
+function clang_getTranslationUnitCursor(tu: CXTranslationUnit): CXCursor;
+  cdecl; external name 'clang_getTranslationUnitCursor';
+function clang_getCursorKind(c: CXCursor): cint;
+  cdecl; external name 'clang_getCursorKind';
+function clang_getCursorSpelling(c: CXCursor): CXString;
+  cdecl; external name 'clang_getCursorSpelling';
+function clang_getCursorKindSpelling(kind: cint): CXString;
+  cdecl; external name 'clang_getCursorKindSpelling';
+function clang_getCursorLocation(c: CXCursor): CXSourceLocation;
+  cdecl; external name 'clang_getCursorLocation';
+function clang_getCursorExtent(c: CXCursor): CXSourceRange;
+  cdecl; external name 'clang_getCursorExtent';
+function clang_Cursor_getRawCommentText(c: CXCursor): CXString;
+  cdecl; external name 'clang_Cursor_getRawCommentText';
+function clang_Cursor_getTranslationUnit(c: CXCursor): CXTranslationUnit;
+  cdecl; external name 'clang_Cursor_getTranslationUnit';
+function clang_Cursor_isMacroFunctionLike(c: CXCursor): cuint;
+  cdecl; external name 'clang_Cursor_isMacroFunctionLike';
+
+procedure clang_getFileLocation(loc: CXSourceLocation;
+    out_file: PCXFile; out_line, out_column, out_offset: PCardinal);
+  cdecl; external name 'clang_getFileLocation';
+function clang_Location_isFromMainFile(loc: CXSourceLocation): cint;
+  cdecl; external name 'clang_Location_isFromMainFile';
+function clang_Location_isInSystemHeader(loc: CXSourceLocation): cint;
+  cdecl; external name 'clang_Location_isInSystemHeader';
+function clang_getFileName(file_: CXFile): CXString;
+  cdecl; external name 'clang_getFileName';
+
+function clang_getCursorType(c: CXCursor): CXType;
+  cdecl; external name 'clang_getCursorType';
+function clang_getTypedefDeclUnderlyingType(c: CXCursor): CXType;
+  cdecl; external name 'clang_getTypedefDeclUnderlyingType';
+function clang_getEnumDeclIntegerType(c: CXCursor): CXType;
+  cdecl; external name 'clang_getEnumDeclIntegerType';
+function clang_getEnumConstantDeclValue(c: CXCursor): cint64;
+  cdecl; external name 'clang_getEnumConstantDeclValue';
+function clang_getFieldDeclBitWidth(c: CXCursor): cint;
+  cdecl; external name 'clang_getFieldDeclBitWidth';
+
+function clang_getTypeSpelling(t: CXType): CXString;
+  cdecl; external name 'clang_getTypeSpelling';
+function clang_isConstQualifiedType(t: CXType): cuint;
+  cdecl; external name 'clang_isConstQualifiedType';
+function clang_getPointeeType(t: CXType): CXType;
+  cdecl; external name 'clang_getPointeeType';
+function clang_getCanonicalType(t: CXType): CXType;
+  cdecl; external name 'clang_getCanonicalType';
+function clang_getArrayElementType(t: CXType): CXType;
+  cdecl; external name 'clang_getArrayElementType';
+function clang_getArraySize(t: CXType): cint64;
+  cdecl; external name 'clang_getArraySize';
+function clang_Type_getSizeOf(t: CXType): cint64;
+  cdecl; external name 'clang_Type_getSizeOf';
+function clang_getResultType(t: CXType): CXType;
+  cdecl; external name 'clang_getResultType';
+function clang_getNumArgTypes(t: CXType): cint;
+  cdecl; external name 'clang_getNumArgTypes';
+function clang_getArgType(t: CXType; i: cuint): CXType;
+  cdecl; external name 'clang_getArgType';
+function clang_isFunctionTypeVariadic(t: CXType): cuint;
+  cdecl; external name 'clang_isFunctionTypeVariadic';
+function clang_getTypeDeclaration(t: CXType): CXCursor;
+  cdecl; external name 'clang_getTypeDeclaration';
+
+function clang_visitChildren(parent: CXCursor; visitor: CXCursorVisitor; data: CXClientData): cuint;
+  cdecl; external name 'clang_visitChildren';
+
+procedure clang_tokenize(tu: CXTranslationUnit; range: CXSourceRange;
+    out_tokens: PPCXToken; out_num: PCardinal);
+  cdecl; external name 'clang_tokenize';
+function clang_getTokenSpelling(tu: CXTranslationUnit; tok: CXToken): CXString;
+  cdecl; external name 'clang_getTokenSpelling';
+procedure clang_disposeTokens(tu: CXTranslationUnit; tokens: PCXToken; num: cuint);
+  cdecl; external name 'clang_disposeTokens';
+
+function clang_getCString(s: CXString): PChar;
+  cdecl; external name 'clang_getCString';
+procedure clang_disposeString(s: CXString);
+  cdecl; external name 'clang_disposeString';
+
+{ --- helpers --- }
+
+{ Snapshot a Pascal string from a CXString, then dispose it. Returns
+  '' if the underlying C string is nil. }
+function CXStringToStr(s: CXString): string;
 
 implementation
+
+function CXStringToStr(s: CXString): string;
+var
+  P: PChar;
+begin
+  P := clang_getCString(s);
+  if P = nil then
+    Result := ''
+  else
+    Result := string(P);
+  clang_disposeString(s);
+end;
 
 end.

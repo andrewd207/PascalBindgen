@@ -70,39 +70,39 @@ function TypesEqual(A, B: TBindingType): Boolean; forward;
 function TypeListsEqual(A, B: TBindingTypeList): Boolean;
 var I: Integer;
 begin
-  if (A = nil) and (B = nil) then Exit(True);
-  if (A = nil) or (B = nil) then Exit(False);
-  if A.Count <> B.Count then Exit(False);
+  if (A = nil) and (B = nil) then begin Result := True; Exit; end;
+  if (A = nil) or (B = nil) then begin Result := False; Exit; end;
+  if A.Count <> B.Count then begin Result := False; Exit; end;
   for I := 0 to A.Count - 1 do
-    if not TypesEqual(A.Items[I], B.Items[I]) then Exit(False);
+    if not TypesEqual(A.Items[I], B.Items[I]) then begin Result := False; Exit; end;
   Result := True;
 end;
 
 function TypesEqual(A, B: TBindingType): Boolean;
 begin
-  if (A = nil) and (B = nil) then Exit(True);
-  if (A = nil) or (B = nil) then Exit(False);
-  if A.Kind <> B.Kind then Exit(False);
-  if A.Spelling <> B.Spelling then Exit(False);
-  if A.ArraySize <> B.ArraySize then Exit(False);
-  if A.ByteSize <> B.ByteSize then Exit(False);
-  if A.CanonicalSpelling <> B.CanonicalSpelling then Exit(False);
-  if not TypesEqual(A.Pointee, B.Pointee) then Exit(False);
-  if not TypesEqual(A.FuncReturn, B.FuncReturn) then Exit(False);
-  if not TypeListsEqual(A.FuncParams, B.FuncParams) then Exit(False);
+  if (A = nil) and (B = nil) then begin Result := True; Exit; end;
+  if (A = nil) or (B = nil) then begin Result := False; Exit; end;
+  if A.Kind <> B.Kind then begin Result := False; Exit; end;
+  if A.Spelling <> B.Spelling then begin Result := False; Exit; end;
+  if A.ArraySize <> B.ArraySize then begin Result := False; Exit; end;
+  if A.ByteSize <> B.ByteSize then begin Result := False; Exit; end;
+  if A.CanonicalSpelling <> B.CanonicalSpelling then begin Result := False; Exit; end;
+  if not TypesEqual(A.Pointee, B.Pointee) then begin Result := False; Exit; end;
+  if not TypesEqual(A.FuncReturn, B.FuncReturn) then begin Result := False; Exit; end;
+  if not TypeListsEqual(A.FuncParams, B.FuncParams) then begin Result := False; Exit; end;
   Result := True;
 end;
 
 function ParamsEqual(A, B: TBindingParamList): Boolean;
 var I: Integer;
 begin
-  if A.Count <> B.Count then Exit(False);
+  if A.Count <> B.Count then begin Result := False; Exit; end;
   for I := 0 to A.Count - 1 do
   begin
-    if A.Items[I].Name <> B.Items[I].Name then Exit(False);
-    if A.Items[I].IsConst <> B.Items[I].IsConst then Exit(False);
+    if A.Items[I].Name <> B.Items[I].Name then begin Result := False; Exit; end;
+    if A.Items[I].IsConst <> B.Items[I].IsConst then begin Result := False; Exit; end;
     if not TypesEqual(A.Items[I].ParamType, B.Items[I].ParamType) then
-      Exit(False);
+      begin Result := False; Exit; end;
   end;
   Result := True;
 end;
@@ -110,13 +110,13 @@ end;
 function FieldsEqual(A, B: TBindingFieldList): Boolean;
 var I: Integer;
 begin
-  if A.Count <> B.Count then Exit(False);
+  if A.Count <> B.Count then begin Result := False; Exit; end;
   for I := 0 to A.Count - 1 do
   begin
-    if A.Items[I].Name <> B.Items[I].Name then Exit(False);
-    if A.Items[I].BitWidth <> B.Items[I].BitWidth then Exit(False);
+    if A.Items[I].Name <> B.Items[I].Name then begin Result := False; Exit; end;
+    if A.Items[I].BitWidth <> B.Items[I].BitWidth then begin Result := False; Exit; end;
     if not TypesEqual(A.Items[I].FieldType, B.Items[I].FieldType) then
-      Exit(False);
+      begin Result := False; Exit; end;
   end;
   Result := True;
 end;
@@ -124,19 +124,19 @@ end;
 function EnumConstsEqual(A, B: TBindingEnumConstList): Boolean;
 var I: Integer;
 begin
-  if A.Count <> B.Count then Exit(False);
+  if A.Count <> B.Count then begin Result := False; Exit; end;
   for I := 0 to A.Count - 1 do
   begin
-    if A.Items[I].Name <> B.Items[I].Name then Exit(False);
-    if A.Items[I].Value <> B.Items[I].Value then Exit(False);
+    if A.Items[I].Name <> B.Items[I].Name then begin Result := False; Exit; end;
+    if A.Items[I].Value <> B.Items[I].Value then begin Result := False; Exit; end;
   end;
   Result := True;
 end;
 
 function DeclsEqual(A, B: TBindingDecl): Boolean;
 begin
-  if A.ClassType <> B.ClassType then Exit(False);
-  if A.Name <> B.Name then Exit(False);
+  if A.ClassType <> B.ClassType then begin Result := False; Exit; end;
+  if A.Name <> B.Name then begin Result := False; Exit; end;
   if A is TBindingFunction then
   begin
     Result :=

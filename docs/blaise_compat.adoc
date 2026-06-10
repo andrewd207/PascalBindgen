@@ -11,7 +11,63 @@ Tested against:
 * FPC 3.3.1 (Linux x86_64, 2026-05-12 build)
 * Blaise v0.9.0-dev via `compiler/bootstrap/blaise_unit_source`
 * Blaise v0.10.0-SNAPSHOT (re-check of the FItems[N] := X issue only)
-* Date: 2026-05-27 (initial), 2026-06-02 (re-check)
+* Blaise v0.11.0-dev (`/tmp/blaise-master`, commit `40755b9`) — full sweep
+* Dates: 2026-05-27 (initial), 2026-06-02 (re-check), 2026-06-09 (v0.11 sweep)
+
+== 2026-06-09 v0.11.0-dev re-check summary
+
+Newly fixed (now compile clean):
+
+* `const` parameter qualifier
+* `@OutOrVarParam` (address of `var`/`out` parameter)
+* `@dynArr[0]` (address of dyn-array element)
+* `Exception.CreateFmt(fmt, [...])`
+
+Still broken (unchanged from prior runs):
+
+* Forward class declaration (`TFoo = class;`)
+* `default;` on indexed property
+* Bare `inherited;`
+* `var X: T = init` initializer at declaration
+* `arr[I].MethodCall` (must stage through a local)
+* `class function ... static`
+* `FItems[N] := X` (class-field dynamic-array indexed write)
+* `P[i]` indexing on typed pointer (`PByte = ^Byte`)
+* Constant-expression array bounds (`array[0..CHUNK-1]`)
+
+== By-value record ABI (SysV) — 2026-06-09
+
+Recent Blaise work added by-value record params/returns (commits
+`9ed5679`, `18e5826`, et al.). Tested through the **QBE backend**
+(not the `--backend native` path — that one is broken even for
+params on this case):
+
+* **Pass POD record by value**: **works**. For
+  `CXString { PtrUInt data; Cardinal private_flags; }` (16 bytes,
+  no ARC fields), QBE splits the value across `RDI:RSI` per SysV.
+  `clang_getCString(s)` with a hand-built `s` returns the right
+  bytes.
+* **Receive POD record returned by value**: **broken**. Blaise's IR
+  emits the call as `call $f(l $s)` — sret-via-hidden-pointer — for
+  the return path, even when the record has no ARC fields and would
+  classify as INTEGER+INTEGER (returned in `RAX:RDX`) under SysV.
+  `s := clang_getClangVersion();` leaves both fields zero because
+  the real libclang function doesn't take a hidden sret arg.
+  Declaring the function as `procedure (out s: CXString)` doesn't
+  rescue it — the call shape Blaise emits still mismatches the C
+  ABI.
+
+Net effect for this project: pascal_bindgen itself only needs to
+build under FPC — it just emits Blaise units, it doesn't need to be
+hosted on Blaise. So the libclang shim has been removed (2026-06-10)
+and `clang.ffi.pas` now declares libclang's by-value entry points
+directly. The Blaise codegen path through this FFI is verified
+working on a smaller harness (`t_pass.pas` / `t_sysv2.pas` round-
+trip CXString via the LLVM backend), so once Blaise's published
+bootstrap binaries catch up with the current stdlib (specifically:
+parse `Exit(value)` and expose `--backend llvm` in the same build),
+`tools/blaise_link.py` can compile pascal_bindgen end-to-end with
+no further changes here.
 
 == Compiler driver / link surface
 
@@ -44,12 +100,12 @@ linked in.
 | `var X: T = default` initializer     | Supported                             | Parse error — initialize in `begin` body instead
 | `arr[I].MethodCall`                  | OK                                    | Parse error; assign to a local first: `obj := arr[I]; obj.Method;`
 | `class function` / `class procedure` | OK with `static;` qualifier           | Not yet parsed (`Expected 'end' in class definition`); use a plain unit-level function
-| `const` parameter qualifier          | Supported                             | Not supported — drop the keyword (caller still passes by value)
+| `const` parameter qualifier          | Supported                             | **Supported as of v0.11.0-dev** (2026-06-09)
 | `FItems[N] := Item;` (writing to array-of-T class field) | OK | Semantic error "Undeclared variable 'FItems'" — see repro below. **Still reproduces on v0.10.0-SNAPSHOT (2026-06-02)** even though local-`var` dynamic arrays now work end-to-end (`SetLength` + indexed read/write fine). Only the class-field indexed-write path is broken.
 | `Format(fmt, [...])` (SysUtils) | Supported via `TVarRec` | **Supported** — handles mixed Integer/string args, e.g. `Format('rc=%d for "%s"', [rc, fn])` works.
-| `Exception.CreateFmt(fmt, [...])` | Supported | **Not** present — no `CreateFmt` constructor on `Exception`. Workaround: `raise E.Create(Format(fmt, [...]))`. The "Array literal element N has type 'string'; expected 'Integer'" error in this case is downstream of CreateFmt being absent, not Format itself failing.
-| `@OutOrVarParam` (taking address of a `var`/`out` parameter) | OK | `Code generation error: Unsupported L-value form for var argument`. Workaround: stage through a local, then assign back.
-| `@dynArr[0]` (address of dyn-array element)               | OK | Same codegen error. Workaround: `Pointer(arr)` gives the base pointer.
+| `Exception.CreateFmt(fmt, [...])` | Supported | **Supported as of v0.11.0-dev** (2026-06-09).
+| `@OutOrVarParam` (taking address of a `var`/`out` parameter) | OK | **Supported as of v0.11.0-dev** (2026-06-09).
+| `@dynArr[0]` (address of dyn-array element)               | OK | **Supported as of v0.11.0-dev** (2026-06-09).
 | `P[i]` indexing of typed pointer (`PByte = ^Byte`)        | OK in mode delphi | `Semantic error: 'P' is not a static array or dynamic array` (or, with a cast, `String subscript '[]' requires a string expression`). The `type PByte = ^Byte` declaration itself parses, and typed-pointer arithmetic + deref works (`(P + i)^`); only `[]` dispatch on a pointer is missing.
 | Constant-expression array bounds (e.g. `array[0..CHUNK-1]`) | OK     | `Parse error: Expected integer bound`. Workaround: literal bound.
 |===

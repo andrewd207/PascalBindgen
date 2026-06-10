@@ -92,7 +92,7 @@ begin
   P  := Pos(':', S);
   P2 := Pos('=', S);
   if (P2 > 0) and ((P = 0) or (P2 < P)) then P := P2;
-  if P <= 0 then Exit(False);
+  if P <= 0 then begin Result := False; Exit; end;
   Sym  := Copy(S, 1, P - 1);
   Rest := Copy(S, P + 1, Length(S) - P);
   Result := True;
@@ -147,7 +147,7 @@ function FindTarget(var Targets: TTargetSpecs; const Sym: string): Integer;
 var I: Integer;
 begin
   for I := 0 to High(Targets) do
-    if Targets[I].Symbol = Sym then Exit(I);
+    if Targets[I].Symbol = Sym then begin Result := I; Exit; end;
   Result := -1;
 end;
 
@@ -184,6 +184,9 @@ var
   PrefixTypes: Boolean;
   ExtraArgs:   array of string;
   Targets:     TTargetSpecs;
+  TgtTmp:      TTargetSpec;  { staging slot for `Targets[Ti].field := X`
+                               writes, which Blaise's parser doesn't
+                               accept directly on dyn-array record fields. }
   I, J, Ti:    Integer;
   PastDD:      Boolean;
   U:           TBindingUnit;
@@ -233,10 +236,14 @@ begin
       begin
         SetLength(Targets, Length(Targets) + 1);
         Ti := High(Targets);
-        Targets[Ti].Symbol := Sym;
-        Targets[Ti].Args   := TStringList.Create;
+        TgtTmp := Targets[Ti];
+        TgtTmp.Symbol := Sym;
+        TgtTmp.Args   := TStringList.Create;
+        Targets[Ti] := TgtTmp;
       end;
-      Targets[Ti].Triple := Rest;
+      TgtTmp := Targets[Ti];
+      TgtTmp.Triple := Rest;
+      Targets[Ti] := TgtTmp;
     end
     else if Arg = '--target-args' then
     begin
@@ -252,8 +259,10 @@ begin
         { Tolerate ordering: --target-args before --target. }
         SetLength(Targets, Length(Targets) + 1);
         Ti := High(Targets);
-        Targets[Ti].Symbol := Sym;
-        Targets[Ti].Args   := TStringList.Create;
+        TgtTmp := Targets[Ti];
+        TgtTmp.Symbol := Sym;
+        TgtTmp.Args   := TStringList.Create;
+        Targets[Ti] := TgtTmp;
       end;
       SplitArgs(Rest, Targets[Ti].Args);
     end
@@ -332,7 +341,7 @@ begin
 
   Merged := MergeUnits(Units, Symbols);
   try
-    for Ti := 0 to High(Units) do Units[Ti].Free;
+    for Ti := 0 to High(Units) do begin U := Units[Ti]; U.Free; end;
     if Dialect = '' then DumpUnit(Merged)
     else
     begin
@@ -342,6 +351,6 @@ begin
     end;
   finally
     Merged.Free;
-    for Ti := 0 to High(Targets) do Targets[Ti].Args.Free;
+    for Ti := 0 to High(Targets) do begin TgtTmp := Targets[Ti]; TgtTmp.Args.Free; end;
   end;
 end.

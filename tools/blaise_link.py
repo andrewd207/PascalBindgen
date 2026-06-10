@@ -1,35 +1,54 @@
 #!/usr/bin/env python3
-"""Blaise compile-and-link wrapper that injects the libclang_shim
-object file at link time.
+"""Blaise compile-and-link wrapper that links libclang directly.
 
-Blaise currently has no `{$linklib}` directive, no `--extra-object`
-flag, and no env var to slip extra args into its `cc` invocation —
-the linker line is hardcoded in compiler/src/main/pascal/Blaise.pas
-(see CompileToNativeLLVM). So we sidestep Blaise's link step
-entirely:
+STATUS (2026-06-10): currently broken end-to-end. pascal_bindgen uses
+SysUtils, which on the live Blaise tree calls Exit(value); the only
+Blaise bootstrap binaries that expose --backend llvm have an older
+parser that rejects that form. The current compiler/target/blaise
+parses Exit(value) but doesn't expose --backend llvm in its driver.
+Until a single Blaise binary covers both, this script can't compile
+pascal_bindgen.
 
-    1. Run blaise with `--emit-ir` instead of `--output`, capturing
-       the LLVM IR to a temp `.ll` file.
+The libclang FFI itself (src/main/pascal/clang.ffi.pas) is already
+LLVM-backend-ready: by-value CXString/CXCursor/CXType round-trips
+were verified on a smaller harness. So when the bootstrap catches
+up, the only fix needed here will be pointing BLAISE_BIN at it.
+
+Blaise has no `{$linklib}` directive, no `--extra-object` flag, and
+no env var to slip extra args into its `cc` invocation — the linker
+line is hardcoded in compiler/src/main/pascal/Blaise.pas. So we
+sidestep Blaise's link step entirely:
+
+    1. Run blaise with `--backend llvm --emit-ir`, capturing the
+       LLVM IR to a temp `.ll` file.
     2. Compile the `.ll` to `.o` ourselves via clang.
-    3. Run cc to link the .o against the Blaise RTL, libclang_shim,
-       libm, and libstdc++ — the same shape Blaise would use, plus
-       our shim.
+    3. Run cc to link the .o against the Blaise RTL, libclang, libm,
+       and libstdc++.
 
-We mirror blaisec.py's argv shape (`--source X --output Y --unit-path D`
-etc.) so pasbuild's --compiler flag can point at us directly.
+The LLVM backend is required: it's the only Blaise backend that
+lowers libclang's by-value CXString / CXCursor / CXType records per
+the SysV AMD64 ABI. The QBE backend still emits sret-via-hidden-
+pointer on return paths, which mismatches libclang's
+return-in-registers calls.
+
+We mirror blaisec.py's argv shape (`--source X --output Y
+--unit-path D` etc.) so pasbuild's --compiler flag can point at us
+directly.
 """
 
 import os
-import shlex
-import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 REPO_BLAISE = Path('/home/andrew/Programming/GroupProjects/blaise')
-BLAISE_BIN  = REPO_BLAISE / 'compiler' / 'bootstrap' / 'blaise_unit_source'
-RTL_PATH    = REPO_BLAISE / 'compiler' / 'bootstrap' / 'blaise_rtl_unit_source.a'
+# The shipping compiler/target/blaise on llvm_current is built without
+# --backend llvm exposed. Use the pre-built bootstrap snapshot that
+# does, along with its matching RTL .a, so we can generate LLVM IR
+# for libclang's by-value record ABI.
+BLAISE_BIN  = REPO_BLAISE / 'compiler' / 'bootstrap' / 'blaise_llvm_current.ae2901a'
+RTL_PATH    = REPO_BLAISE / 'compiler' / 'bootstrap' / 'blaise_rtl_llvm_current.ae2901a.a'
 
 UNIT_PATHS  = [
     REPO_BLAISE / 'compiler' / 'src' / 'main' / 'pascal',
@@ -37,8 +56,7 @@ UNIT_PATHS  = [
     REPO_BLAISE / 'stdlib'   / 'src' / 'main' / 'pascal',
 ]
 
-REPO_PBG    = Path(__file__).resolve().parent.parent
-SHIM_SO     = REPO_PBG / 'src' / 'main' / 'c' / 'libclang_shim.so'
+LIBCLANG    = '-l:libclang-17.so.1'
 
 
 def parse_argv(argv):
@@ -75,17 +93,6 @@ def main():
     if not BLAISE_BIN.exists():
         sys.stderr.write(f'blaise_link: blaise binary not found at {BLAISE_BIN}\n')
         return 127
-    if not SHIM_SO.exists():
-        sys.stderr.write(
-            f'blaise_link: libclang_shim.so not found at {SHIM_SO}\n'
-            '             (run: gcc -shared -fPIC -O2 -I vendor '
-            '-o src/main/c/libclang_shim.so src/main/c/libclang_shim.c '
-            '-l:libclang-17.so.1)\n')
-        return 127
-
-    env = os.environ.copy()
-    if RTL_PATH.exists():
-        env['BLAISE_RTL'] = str(RTL_PATH)
 
     extra_unit_paths = []
     for p in UNIT_PATHS:
@@ -93,25 +100,27 @@ def main():
             extra_unit_paths += ['--unit-path', str(p)]
 
     with tempfile.TemporaryDirectory(prefix='blaise_link_') as td:
-        ll = Path(td) / 'out.ll'
+        ll  = Path(td) / 'out.ll'
         obj = Path(td) / 'out.o'
 
-        # 1. Pascal -> LLVM IR, captured from stdout.
-        cmd = [str(BLAISE_BIN), '--source', src, '--emit-ir', *rest, *extra_unit_paths]
+        # 1. Pascal -> LLVM IR (stdout). The bootstrap snapshot defaults
+        #    to --backend llvm, so we don't pass it explicitly (some
+        #    builds parse --backend strictly; --emit-ir alone is safe).
+        cmd = [str(BLAISE_BIN), '--source', src,
+               '--emit-ir', *rest, *extra_unit_paths]
         with open(ll, 'wb') as f:
-            run(cmd, stdout=f, env=env)
+            run(cmd, stdout=f)
 
         # 2. .ll -> .o
         run(['clang', '-c', '-o', str(obj), str(ll)])
 
-        # 3. .o + RTL + shim + libs -> binary
+        # 3. .o + RTL + libclang + libs -> binary
         link_cmd = [
             'cc', '-o', out,
             '-no-pie',
             str(obj),
             str(RTL_PATH),
-            str(SHIM_SO),
-            f'-Wl,-rpath,{SHIM_SO.parent}',  # so the binary finds libclang at runtime
+            LIBCLANG,
             '-lm', '-lstdc++',
         ]
         run(link_cmd)
