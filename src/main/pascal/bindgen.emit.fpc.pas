@@ -54,6 +54,16 @@ type
     FDeclaredTypeNames: TStringList;
     FPointerAliases: TStringList;
     FOpaqueTypedefs: TStringList;
+    { Case-insensitive registry of every type identifier already
+      emitted in the type section (final, escaped form). Gates the
+      synthetic opaque / forward-record / pointer-alias passes so they
+      never re-declare a name that a real decl — or an earlier
+      synthetic pass — already produced. The opaque pass keys off the
+      raw C name while the pointer-alias pass keys off the
+      reserved-word-escaped name, so a plain IndexOf across the lists
+      misses collisions like C `FILE` (opaque `FILE_ = Pointer`) vs the
+      `^FILE` pointee stub (`FILE_ = record end`). }
+    FTypeIdents: TStringList;
     FNeedsVaList: Boolean;
     FPrefixTypes: Boolean;
     procedure Line(const S: string = '');
@@ -79,6 +89,10 @@ type
       function/field/param names keep using EscapeIdent. }
     function  TypeIdent(const S: string): string;
     function  DisambiguateIdent(const CName: string): string;
+    { True the first time Ident (case-folded) is offered for a type
+      declaration; False on any later repeat, meaning the caller must
+      skip it to avoid a duplicate-type-name error. }
+    function  ClaimTypeIdent(const Ident: string): Boolean;
     procedure CollectFunctionPointerAliases(U: TBindingUnit);
     procedure WalkTypeForAliases(T: TBindingType);
   public
@@ -110,6 +124,9 @@ begin
   FDeclaredTypeNames := TStringList.Create;
   FDeclaredTypeNames.Sorted := True;
   FDeclaredTypeNames.Duplicates := dupIgnore;
+  FTypeIdents := TStringList.Create;
+  FTypeIdents.Sorted := True;
+  FTypeIdents.Duplicates := dupIgnore;
 end;
 
 { FPC reserved-word table (objfpc + delphi modes). Identifiers
@@ -131,6 +148,15 @@ const
     'threadvar','to','try','type','unit','until','uses','var',
     'while','with','xor'
   );
+
+function TFpcEmitter.ClaimTypeIdent(const Ident: string): Boolean;
+var
+  Key: string;
+begin
+  Key := LowerCase(Ident);
+  Result := FTypeIdents.IndexOf(Key) < 0;
+  if Result then FTypeIdents.Add(Key);
+end;
 
 function TFpcEmitter.EscapeIdent(const S: string): string;
 var
@@ -168,6 +194,7 @@ begin
   FPointerAliases.Free;
   FOpaqueTypedefs.Free;
   FDeclaredTypeNames.Free;
+  FTypeIdents.Free;
   inherited Destroy;
 end;
 
@@ -714,6 +741,7 @@ begin
   FOutput.Clear;
   FEmittedTypes.Clear;
   FDeclaredTypeNames.Clear;
+  FTypeIdents.Clear;
   for I := 0 to U.Decls.Count - 1 do
   begin
     D := U.Decls.Items[I];
@@ -726,6 +754,11 @@ begin
        and (LowerCase(MapType(TBindingTypedef(D).Aliased)) = LowerCase(D.Name)) then
       Continue;
     FDeclaredTypeNames.Add(LowerCase(D.Name));
+    { Pre-seed the emitted-identifier registry with the final name each
+      real decl will produce, so the synthetic passes below skip any
+      name a real record/enum/typedef already claims — even across
+      reserved-word escaping. }
+    ClaimTypeIdent(TypeIdent(D.Name));
   end;
   CollectFunctionPointerAliases(U);
   EmitProvenance(U);
@@ -767,6 +800,8 @@ begin
         (glib, mingw windows.h, ...) is dropped as a duplicate. }
       FEmittedTypes.Add('va_list');
       FEmittedTypes.Add('__va_list_tag');
+      ClaimTypeIdent('__va_list_tag');
+      ClaimTypeIdent('va_list');
       Line('{$IFDEF CPUX86_64}{$IFDEF UNIX}');
       Line('  __va_list_tag = record');
       Line('    gp_offset, fp_offset: cuint;');
@@ -783,7 +818,8 @@ begin
       types we never declared. Layout will not match C — this is a
       v1 "compile, don't crash" measure. }
     for I := 0 to FOpaqueTypedefs.Count - 1 do
-      if FDeclaredTypeNames.IndexOf(LowerCase(FOpaqueTypedefs[I])) < 0 then
+      if (FDeclaredTypeNames.IndexOf(LowerCase(FOpaqueTypedefs[I])) < 0)
+         and ClaimTypeIdent(TypeIdent(FOpaqueTypedefs[I])) then
         { Default to Pointer — overwhelmingly the right ABI size for
           handle-like opaque types (Display *, EGLNativeDisplayType,
           most platform handles). Wrong only for the rare opaque
@@ -828,6 +864,7 @@ begin
            or (Pos('*', FPointerAliases[I]) > 0)
            or (Pos('__va_list_tag', FPointerAliases[I]) > 0)
            or (Copy(FPointerAliases[I], 1, 2) = '__') then Continue;
+        if not ClaimTypeIdent(TypeIdent(FPointerAliases[I])) then Continue;
         Line(Format('  %s = record end;', [TypeIdent(FPointerAliases[I])]));
       end;
       for I := 0 to FPointerAliases.Count - 1 do
@@ -845,6 +882,7 @@ begin
           by the source. Pascal is case-insensitive. }
         if FDeclaredTypeNames.IndexOf(LowerCase('P' + FPointerAliases[I])) >= 0 then
           Continue;
+        if not ClaimTypeIdent('P' + FPointerAliases[I]) then Continue;
         Line(Format('  P%s = ^%s;',
                     [FPointerAliases[I], TypeIdent(FPointerAliases[I])]));
       end;

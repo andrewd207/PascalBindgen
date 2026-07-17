@@ -115,6 +115,7 @@ type
     procedure VariadicEmitsVarargsModifier;
     procedure ConstCharPointerBecomesPAnsiChar;
     procedure EmittedSourceCompilesUnderFpc;
+    procedure OpaqueTypedefAndPointerAliasEmitNoDuplicate;
   end;
 
   TBlaiseEmitTests = class(TTestCase)
@@ -1000,6 +1001,49 @@ begin
     DeleteFile(ChangeFileExt(PasFile, '.o'));
     DeleteFile(ChangeFileExt(PasFile, '.ppu'));
   end;
+end;
+
+{ Same regression as the Blaise emitter (graemeg/blaise discussion
+  #185): an opaque `FILE` used as `FILE *` must not be declared twice
+  — once as `FILE_ = Pointer` (opaque pass) and again as
+  `FILE_ = record end` (pointer-alias stub keyed on the escaped name). }
+procedure TFpcEmitTests.OpaqueTypedefAndPointerAliasEmitNoDuplicate;
+const
+  Hdr =
+    '#include <stdio.h>'                  + LineEnding +
+    'typedef struct screen SCREEN;'       + LineEnding +
+    'SCREEN *set_term(SCREEN *newsc);'    + LineEnding +
+    'int put_win(FILE *fp);'              + LineEnding;
+var
+  TmpDir, HdrFile: string;
+  U: TBindingUnit;
+  E: TFpcEmitter;
+  S: string;
+begin
+  TmpDir := GetTempDir;
+  HdrFile := IncludeTrailingPathDelimiter(TmpDir) + 'fpcdup.h';
+  WriteSnippet(HdrFile, Hdr);
+  try
+    U := ParseHeader(HdrFile, ['-target', 'x86_64-linux-gnu']);
+    try
+      E := TFpcEmitter.Create('fpcdup', 'libfpcdup');
+      try
+        S := E.Emit(U);
+      finally
+        E.Free;
+      end;
+    finally
+      U.Free;
+    end;
+  finally
+    DeleteFile(HdrFile);
+  end;
+  AssertTrue('opaque FILE emitted as a Pointer alias: ' + S,
+             Pos('FILE_ = Pointer', S) > 0);
+  AssertFalse('opaque FILE must not also get a record stub: ' + S,
+              Pos('FILE_ = record end', S) > 0);
+  AssertFalse('no self-typedef SCREEN = screen: ' + S,
+              Pos('SCREEN = screen', S) > 0);
 end;
 
 { TBlaiseEmitTests }
