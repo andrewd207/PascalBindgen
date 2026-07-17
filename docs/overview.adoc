@@ -50,8 +50,8 @@ flag:
 `--blaise`::
   Emits source aimed at the Blaise compiler. Uses Blaise's preferred
   spellings (lowercase keywords as Blaise writes them, ARC-aware
-  string handling, `external name '...'` syntax, no `cvar`/`public`
-  modifiers FPC ships but Blaise doesn't).
+  string handling, `external '<lib>' name '...'` syntax, no
+  `cvar`/`public` modifiers FPC ships but Blaise doesn't).
 
 `--fpc`::
   Emits source aimed at Free Pascal / Delphi-mode FPC. Uses

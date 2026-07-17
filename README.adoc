@@ -62,7 +62,8 @@ Pick one with a flag:
   `uses ctypes`, `cdecl;` modifier, `external 'libfoo';` directive.
 `--blaise`::
   Blaise compiler dialect. No `{$mode}` / `{$PACKRECORDS}`, no
-  `ctypes`, `external name '...'` syntax.
+  `ctypes`, `external 'libfoo' name '...'` syntax (or bare
+  `external name '...'` when `--library` is omitted).
 `--rqbasic`::
   RapidQ-ll BASIC (`.bas`). Flat `TYPE` / `CONST` / `DECLARE`
   statements; no unit wrapper.

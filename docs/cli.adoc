@@ -55,8 +55,9 @@ the parser sees before committing to an emitter.
 +
 * `--fpc` → `external 'libname' name '...';`
 * `--rqbasic` → `DECLARE ... LIB "libname" ALIAS "..."`.
-* `--blaise` records it as a provenance comment (Blaise hasn't
-  grown a library directive yet).
+* `--blaise` → `external 'libname' name '...';` (resolved at link
+  time; bare `m` → `libm`, or pass a full soname like `libm.so.6`).
+  Without `--library` the clause falls back to `external name '...'`.
 
 `--prefix-types`::
   Prefixes every emitted type name with `T` (e.g. `GtkWindow` →

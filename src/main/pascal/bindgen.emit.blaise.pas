@@ -18,9 +18,10 @@
   2. Primitive mapping targets Blaise's built-in types (`Integer`,
      `Cardinal`, `Int64`, `AnsiChar`, ...) rather than ctypes
      aliases.
-  3. `external` declarations carry only `name '...'`. No `cdecl`,
-     no library directive — Blaise hasn't grown that syntax yet, so
-     a `--library` value is recorded as a provenance comment instead.
+  3. `external` declarations carry no `cdecl` (Blaise's default ABI
+     is already C). A `--library` value is emitted as
+     `external '<lib>' name '<sym>'`; with no `--library` the clause
+     falls back to a bare `external name '<sym>'`.
   4. Reserved-word collisions resolve to a `_` suffix rather than
      FPC's `&` prefix (Blaise has no `&` escape).
 
@@ -610,7 +611,7 @@ begin
   for I := 0 to U.HeaderPaths.Count - 1 do
     Line('  source: ' + U.HeaderPaths.Strings[I]);
   if FLibrary <> '' then
-    Line('  library: ' + FLibrary + '   -- informational; Blaise resolves externs at link time');
+    Line('  library: ' + FLibrary + '   -- emitted as external ''' + FLibrary + ''' name ''...''');
   if U.CommandLine <> '' then
     Line('  command: ' + U.CommandLine);
   if U.ClangVersion <> '' then
@@ -643,7 +644,14 @@ begin
   if Params <> '' then Params := '(' + Params + ')';
 
   RetType := MapTypeForSig(F.ReturnType);
-  Modifiers := Format('external name ''%s''', [F.Name]);
+  { Blaise now parses `external '<lib>' name '<sym>'` and resolves the
+    library at link time (bare 'm' -> libm, or a full soname like
+    'libm.so.6'), matching the FPC emitter. Fall back to a bare
+    `external name '<sym>'` when no --library was given. }
+  if FLibrary <> '' then
+    Modifiers := Format('external ''%s'' name ''%s''', [FLibrary, F.Name])
+  else
+    Modifiers := Format('external name ''%s''', [F.Name]);
   if F.IsVarArgs then
     Modifiers := Modifiers +
       '  { varargs — Blaise has no varargs syntax yet, call via wrapper }';

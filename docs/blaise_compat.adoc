@@ -77,7 +77,7 @@ no further changes here.
 
 | Library link via directive    | `{$linklib X}` honored        | Directive silently consumed (`uLexer.pas:472`); no `-l` flag emitted
 | Library link via CLI / env    | `-Fl<dir>`, `-k-l<name>`      | None — `cc` arg list is hardcoded in `Blaise.pas:511-527`
-| Loader-resolved `external 'lib'` | `external 'libfoo'` syntax  | No equivalent; externs are bare `external name 'sym'`
+| Loader-resolved `external 'lib'` | `external 'libfoo'` syntax  | Supported: `external 'libfoo' name 'sym'`, resolved at link time (bare `m` → `libm`, or a full soname)
 | Calling conventions in extern | `cdecl`/`stdcall`/...         | None — externs carry only `name '...'`
 | Varargs                        | `varargs;` modifier           | None
 |===

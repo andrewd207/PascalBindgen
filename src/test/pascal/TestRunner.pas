@@ -135,6 +135,7 @@ type
     procedure DisambiguatesAgainstRtlGlobalCollision;
     procedure OpaqueTypedefAndPointerAliasEmitNoDuplicate;
     procedure PointerToBuiltinIsNotReservedEscaped;
+    procedure NoLibraryEmitsBareExternalName;
   end;
 
   TClangTypeTests = class(TTestCase)
@@ -1087,9 +1088,8 @@ begin
   S := EmitSample;
   AssertTrue('DO NOT EDIT', Pos('DO NOT EDIT', S) > 0);
   AssertTrue('Blaise dialect banner', Pos('Blaise dialect', S) > 0);
-  AssertTrue('library shows up as informational',
-             (Pos('library: libsample', S) > 0) and
-             (Pos('informational', S) > 0));
+  AssertTrue('library named in provenance',
+             Pos('library: libsample', S) > 0);
 end;
 
 procedure TBlaiseEmitTests.UsesBlaiseBuiltinTypesNotCtypes;
@@ -1106,7 +1106,10 @@ var S: string;
 begin
   S := EmitSample;
   AssertTrue('add signature', Pos('function add(a: Integer; b: Integer): Integer;', S) > 0);
-  AssertTrue('external name', Pos('external name ''add''', S) > 0);
+  { --library libsample -> external 'libsample' name 'add' (Blaise now
+    resolves the library at link time). }
+  AssertTrue('external with library and name',
+             Pos('external ''libsample'' name ''add''', S) > 0);
   AssertFalse('no cdecl modifier', Pos('cdecl', S) > 0);
 end;
 
@@ -1253,12 +1256,14 @@ begin
   S := EmitBlaiseForTarget(Hdr, 'x86_64-w64-mingw32');
   AssertTrue('WriteFile renamed to WriteFile_: ' + S,
              Pos('function WriteFile_(', S) > 0);
+  { The external clause carries the library ('libsizeprobe'); assert on
+    the `name '<sym>'` part so it holds regardless of the library. }
   AssertTrue('WriteFile external keeps original C name: ' + S,
-             Pos('external name ''WriteFile''', S) > 0);
+             Pos('name ''WriteFile''', S) > 0);
   AssertTrue('Sleep renamed to Sleep_: ' + S,
              Pos('procedure Sleep_(', S) > 0);
   AssertTrue('Sleep external keeps original C name: ' + S,
-             Pos('external name ''Sleep''', S) > 0);
+             Pos('name ''Sleep''', S) > 0);
 end;
 
 { Count case-insensitive occurrences of a substring — used to prove a
@@ -1327,6 +1332,40 @@ begin
              Pos('PInteger = ^Integer;', S) > 0);
   AssertFalse('no escaped ^Integer_ dangling reference: ' + S,
               Pos('^Integer_', S) > 0);
+end;
+
+{ With no --library, the external clause must fall back to a bare
+  `external name '<sym>'` and carry no library string. }
+procedure TBlaiseEmitTests.NoLibraryEmitsBareExternalName;
+const
+  Hdr = 'int add(int a, int b);' + LineEnding;
+var
+  TmpDir, HdrFile, S: string;
+  U: TBindingUnit;
+  E: TBlaiseEmitter;
+begin
+  TmpDir := GetTempDir;
+  HdrFile := IncludeTrailingPathDelimiter(TmpDir) + 'nolib.h';
+  WriteSnippet(HdrFile, Hdr);
+  try
+    U := ParseHeader(HdrFile);
+    try
+      E := TBlaiseEmitter.Create('nolib', '');
+      try
+        S := E.Emit(U);
+      finally
+        E.Free;
+      end;
+    finally
+      U.Free;
+    end;
+  finally
+    DeleteFile(HdrFile);
+  end;
+  AssertTrue('bare external name clause: ' + S,
+             Pos('external name ''add''', S) > 0);
+  AssertFalse('no stray library quote before name: ' + S,
+              Pos('external ''', S) > 0);
 end;
 
 { TClangTypeTests }
