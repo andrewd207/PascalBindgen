@@ -132,6 +132,8 @@ type
     procedure UnsignedLongMapsBySizeOnWin64;
     procedure UnsignedLongMapsBySizeOnLinux;
     procedure DisambiguatesAgainstRtlGlobalCollision;
+    procedure OpaqueTypedefAndPointerAliasEmitNoDuplicate;
+    procedure PointerToBuiltinIsNotReservedEscaped;
   end;
 
   TClangTypeTests = class(TTestCase)
@@ -1213,6 +1215,74 @@ begin
              Pos('procedure Sleep_(', S) > 0);
   AssertTrue('Sleep external keeps original C name: ' + S,
              Pos('external name ''Sleep''', S) > 0);
+end;
+
+{ Count case-insensitive occurrences of a substring — used to prove a
+  type name is declared exactly once. }
+function CountCI(const Haystack, Needle: string): Integer;
+var
+  H, N: string;
+  P, Start: Integer;
+begin
+  Result := 0;
+  H := LowerCase(Haystack);
+  N := LowerCase(Needle);
+  if N = '' then Exit;
+  Start := 1;
+  repeat
+    P := PosEx(N, H, Start);
+    if P = 0 then Break;
+    Inc(Result);
+    Start := P + Length(N);
+  until False;
+end;
+
+{ Regression for graemeg/blaise discussion #185: ncurses declares an
+  opaque `FILE` (typedef with no visible definition) that is also used
+  as `FILE *`. The opaque pass emitted `FILE_ = Pointer` while the
+  pointer-alias pass, keyed on the reserved-word-escaped name, emitted
+  a second `FILE_ = record end` — a duplicate type name Blaise rejects.
+  A case-colliding opaque tag (`struct screen` / `SCREEN`) is the other
+  half of the same report. Both must yield exactly one type decl. }
+procedure TBlaiseEmitTests.OpaqueTypedefAndPointerAliasEmitNoDuplicate;
+const
+  Hdr =
+    '#include <stdio.h>'                  + LineEnding +
+    'typedef struct screen SCREEN;'       + LineEnding +
+    'SCREEN *set_term(SCREEN *newsc);'    + LineEnding +
+    'int put_win(FILE *fp);'              + LineEnding;
+var
+  S: string;
+begin
+  S := EmitBlaiseForTarget(Hdr, 'x86_64-linux-gnu');
+  AssertTrue('opaque FILE emitted as a Pointer alias: ' + S,
+             Pos('FILE_ = Pointer', S) > 0);
+  AssertFalse('opaque FILE must not also get a record stub: ' + S,
+              Pos('FILE_ = record end', S) > 0);
+  { Two-space indent pins this to the type-decl line, not the
+    'PFILE_ = ^FILE_' pointer alias that contains it as a substring. }
+  AssertEquals('FILE_ declared exactly once', 1, CountCI(S, LineEnding + '  FILE_ ='));
+  { The case-colliding SCREEN typedef must collapse to the struct tag,
+    not re-declare it. }
+  AssertFalse('no self-typedef SCREEN = screen: ' + S,
+              Pos('SCREEN = screen', S) > 0);
+  AssertEquals('screen declared exactly once', 1, CountCI(S, LineEnding + '  screen ='));
+end;
+
+{ A pointer to a Blaise builtin (`int *`) must alias the builtin
+  verbatim; routing 'Integer' through the reserved-word escaper would
+  dangle the alias at the undeclared 'Integer_'. }
+procedure TBlaiseEmitTests.PointerToBuiltinIsNotReservedEscaped;
+const
+  Hdr = 'int scan_pair(int *lo, int *hi);' + LineEnding;
+var
+  S: string;
+begin
+  S := EmitBlaiseForTarget(Hdr, 'x86_64-linux-gnu');
+  AssertTrue('PInteger aliases the builtin Integer: ' + S,
+             Pos('PInteger = ^Integer;', S) > 0);
+  AssertFalse('no escaped ^Integer_ dangling reference: ' + S,
+              Pos('^Integer_', S) > 0);
 end;
 
 { TClangTypeTests }

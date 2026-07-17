@@ -51,6 +51,17 @@ type
     FDeclaredTypeNames: TStringList;
     FPointerAliases: TStringList;
     FOpaqueTypedefs: TStringList;
+    { Case-insensitive registry of every type identifier already
+      emitted in the type section (final, escaped form). Gates the
+      synthetic opaque / forward-record / pointer-alias passes so they
+      never re-declare a name that a real decl — or an earlier
+      synthetic pass — already produced. Blaise rejects duplicate type
+      names, and the three passes key off differently-normalized
+      strings (raw C name vs reserved-word-escaped), so a plain
+      IndexOf across the lists misses collisions like C `FILE` (opaque
+      `FILE_ = Pointer`) vs the `^FILE` pointee stub (`FILE_ = record
+      end`). }
+    FTypeIdents: TStringList;
     FNeedsVaList: Boolean;
     { Blaise accepts inline `function(...): T` only at typedef RHS;
       record fields and function params must reference a named alias
@@ -75,6 +86,10 @@ type
       --prefix-types is on. Same guard as FPC/rqbasic. }
     function  TypeIdent(const S: string): string;
     function  DisambiguateIdent(const CName: string): string;
+    { True the first time Ident (case-folded) is offered for a type
+      declaration; False on any later repeat, meaning the caller must
+      skip it to avoid a duplicate-type-name error. }
+    function  ClaimTypeIdent(const Ident: string): Boolean;
     function  PascalizeComment(const Raw: string): string;
     procedure CollectFunctionPointerAliases(U: TBindingUnit);
     procedure WalkTypeForAliases(T: TBindingType);
@@ -126,6 +141,9 @@ begin
   FOpaqueTypedefs := TStringList.Create;
   FOpaqueTypedefs.Sorted := True;
   FOpaqueTypedefs.Duplicates := dupIgnore;
+  FTypeIdents := TStringList.Create;
+  FTypeIdents.Sorted := True;
+  FTypeIdents.Duplicates := dupIgnore;
 end;
 
 destructor TBlaiseEmitter.Destroy;
@@ -135,6 +153,7 @@ begin
   FDeclaredTypeNames.Free;
   FPointerAliases.Free;
   FOpaqueTypedefs.Free;
+  FTypeIdents.Free;
   inherited Destroy;
 end;
 
@@ -231,6 +250,15 @@ begin
      or (FEmittedTypes.IndexOf('fn:' + LowerCase(Result)) >= 0)
      or IsBlaiseRtlGlobal(Result) do
     Result := Result + '_';
+end;
+
+function TBlaiseEmitter.ClaimTypeIdent(const Ident: string): Boolean;
+var
+  Key: string;
+begin
+  Key := LowerCase(Ident);
+  Result := FTypeIdents.IndexOf(Key) < 0;
+  if Result then FTypeIdents.Add(Key);
 end;
 
 function TBlaiseEmitter.EscapeIdent(const S: string): string;
@@ -759,10 +787,12 @@ var
   HasTypes, HasFuncs, HasMacros: Boolean;
   EC: TBindingEnumConst;
   StartIdx: Integer;
+  Pointee: string;
 begin
   FOutput.Clear;
   FEmittedTypes.Clear;
   FDeclaredTypeNames.Clear;
+  FTypeIdents.Clear;
   for I := 0 to U.Decls.Count - 1 do
   begin
     D := U.Decls.Items[I];
@@ -772,6 +802,11 @@ begin
        and (LowerCase(MapType(TBindingTypedef(D).Aliased)) = LowerCase(D.Name)) then
       Continue;
     FDeclaredTypeNames.Add(D.Name);
+    { Pre-seed the emitted-identifier registry with the final name each
+      real decl will produce, so the synthetic passes below skip any
+      name a real record/enum/typedef already claims — even across
+      reserved-word escaping. }
+    ClaimTypeIdent(TypeIdent(D.Name));
   end;
   CollectFunctionPointerAliases(U);
   EmitProvenance(U);
@@ -803,6 +838,8 @@ begin
     begin
       FEmittedTypes.Add('va_list');
       FEmittedTypes.Add('__va_list_tag');
+      ClaimTypeIdent('__va_list_tag');
+      ClaimTypeIdent('va_list');
       Line('  __va_list_tag = record');
       Line('    gp_offset: Cardinal;');
       Line('    fp_offset: Cardinal;');
@@ -814,7 +851,8 @@ begin
     { Opaque stubs for typedef-ref names that reference system-header
       types we never declared. }
     for I := 0 to FOpaqueTypedefs.Count - 1 do
-      if FDeclaredTypeNames.IndexOf(FOpaqueTypedefs[I]) < 0 then
+      if (FDeclaredTypeNames.IndexOf(FOpaqueTypedefs[I]) < 0)
+         and ClaimTypeIdent(TypeIdent(FOpaqueTypedefs[I])) then
         Line(Format('  %s = Pointer;  { opaque — layout unknown, assumed pointer-shaped }',
                     [TypeIdent(FOpaqueTypedefs[I])]));
     { Synthesized 'P<X> = ^X' aliases — emit forward-record stubs for
@@ -837,6 +875,7 @@ begin
            or (Pos('*', FPointerAliases[I]) > 0)
            or (Pos('__va_list_tag', FPointerAliases[I]) > 0)
            or (Copy(FPointerAliases[I], 1, 2) = '__') then Continue;
+        if not ClaimTypeIdent(TypeIdent(FPointerAliases[I])) then Continue;
         Line(Format('  %s = record end;', [TypeIdent(FPointerAliases[I])]));
       end;
       for I := 0 to FPointerAliases.Count - 1 do
@@ -849,8 +888,16 @@ begin
            or (Pos('__va_list_tag', FPointerAliases[I]) > 0) then Continue;
         if FDeclaredTypeNames.IndexOf('P' + FPointerAliases[I]) >= 0 then
           Continue;
-        Line(Format('  P%s = ^%s;',
-                    [FPointerAliases[I], TypeIdent(FPointerAliases[I])]));
+        if not ClaimTypeIdent('P' + FPointerAliases[I]) then Continue;
+        { A builtin pointee is already in Blaise spelling ('Integer',
+          'Boolean', ...); routing it through TypeIdent would apply the
+          reserved-word '_' suffix and dangle the reference
+          ('^Integer_'). Emit builtins verbatim. }
+        if IsBlaiseBuiltin(FPointerAliases[I]) then
+          Pointee := FPointerAliases[I]
+        else
+          Pointee := TypeIdent(FPointerAliases[I]);
+        Line(Format('  P%s = ^%s;', [FPointerAliases[I], Pointee]));
       end;
     end;
     for I := 0 to U.Decls.Count - 1 do
