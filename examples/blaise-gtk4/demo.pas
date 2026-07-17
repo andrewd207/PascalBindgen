@@ -34,7 +34,7 @@ end;
 procedure on_clicked(button: Pointer; user_data: Pointer);
 begin
   WriteLn('button clicked');
-  quit_app;
+  quit_app();
 end;
 
 function on_tick(user_data: Pointer): Integer;
@@ -43,11 +43,11 @@ begin
   WriteLn('tick — ' + IntToStr(g_seconds_left) + 's left');
   if g_seconds_left <= 0 then
   begin
-    quit_app;
+    quit_app();
     Result := 0;   { G_SOURCE_REMOVE }
     Exit;
   end;
-  update_button_label;
+  update_button_label();
   Result := 1;     { G_SOURCE_CONTINUE }
 end;
 
