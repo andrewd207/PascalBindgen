@@ -136,6 +136,7 @@ type
     procedure OpaqueTypedefAndPointerAliasEmitNoDuplicate;
     procedure PointerToBuiltinIsNotReservedEscaped;
     procedure NoLibraryEmitsBareExternalName;
+    procedure DisambiguatesAgainstMathBuiltinCollision;
   end;
 
   TClangTypeTests = class(TTestCase)
@@ -1366,6 +1367,33 @@ begin
              Pos('external name ''add''', S) > 0);
   AssertFalse('no stray library quote before name: ' + S,
               Pos('external ''', S) > 0);
+end;
+
+{ Blaise defines the math builtins (Sin/Cos/Floor/...) in global scope,
+  so a same-named C extern (libm's floor/cos) collides. The Pascal-side
+  identifier must be renamed while the external clause keeps the C
+  symbol; a non-builtin like hypot must stay untouched. }
+procedure TBlaiseEmitTests.DisambiguatesAgainstMathBuiltinCollision;
+const
+  Hdr =
+    'double floor(double x);'          + LineEnding +
+    'double cos(double x);'            + LineEnding +
+    'double hypot(double a, double b);' + LineEnding;
+var
+  S: string;
+begin
+  S := EmitBlaiseForTarget(Hdr, 'x86_64-linux-gnu');
+  AssertTrue('floor renamed to floor_: ' + S,
+             Pos('function floor_(', S) > 0);
+  AssertTrue('floor external keeps original C name: ' + S,
+             Pos('name ''floor''', S) > 0);
+  AssertTrue('cos renamed to cos_: ' + S,
+             Pos('function cos_(', S) > 0);
+  AssertTrue('cos external keeps original C name: ' + S,
+             Pos('name ''cos''', S) > 0);
+  { hypot is not a Blaise builtin — must not be renamed. }
+  AssertTrue('non-builtin hypot untouched: ' + S,
+             Pos('function hypot(', S) > 0);
 end;
 
 { TClangTypeTests }

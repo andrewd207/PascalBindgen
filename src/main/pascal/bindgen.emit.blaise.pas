@@ -213,7 +213,14 @@ const
       the RTL .a but still clash as global identifiers. }
     '|abs|assigned|chr|dec|dispose|exclude|exit|finalize|high|inc' +
     '|include|initialize|length|low|new|odd|ord|pred|round|setlength' +
-    '|sizeof|sqr|sqrt|succ|trunc|typeinfo|';
+    '|sizeof|sqr|sqrt|succ|trunc|typeinfo' +
+    { Math builtins defined in the compiler's global scope
+      (uSymbolTable.pas). They collide with same-named C externs —
+      libm's floor/ceil/sin/cos/tan/... — so the Pascal side is
+      renamed while `external name '<sym>'` keeps the C symbol.
+      Sqrt/Round/Trunc already appear above. }
+    '|ceil|floor|ln|log2|log10|power|sin|cos|tan|arctan|arctan2' +
+    '|arcsin|arccos|sinh|cosh|tanh|isnan|isinfinite|';
 
 function IsBlaiseRtlGlobal(const S: string): Boolean;
 begin
