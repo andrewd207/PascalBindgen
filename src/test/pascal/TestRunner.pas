@@ -78,6 +78,13 @@ type
     procedure UnitOwnsItsDecls;
   end;
 
+  TLibraryMapTests = class(TTestCase)
+  published
+    procedure GlobMatchesWildcards;
+    procedure ResolveLibraryFirstMatchWinsElseDefault;
+    procedure FpcEmitterRoutesLibraryPerHeader;
+  end;
+
   TParserTests = class(TTestCase)
   private
     function SampleHeader: string;
@@ -212,6 +219,96 @@ begin
   finally
     U.Free;
   end;
+end;
+
+{ TLibraryMapTests }
+
+procedure TLibraryMapTests.GlobMatchesWildcards;
+begin
+  AssertTrue('exact', GlobMatch('pango-layout.h', 'pango-layout.h'));
+  AssertTrue('trailing *', GlobMatch('pango*', 'pango-layout.h'));
+  AssertTrue('surround *', GlobMatch('*/pango/*', '/usr/include/pango/x.h'));
+  AssertTrue('? one char', GlobMatch('gtk?.h', 'gtk4.h'));
+  AssertTrue('star matches empty', GlobMatch('a*b', 'ab'));
+  AssertFalse('? needs a char', GlobMatch('gtk?.h', 'gtk.h'));
+  AssertFalse('anchored: no partial', GlobMatch('pango', 'pango-layout.h'));
+  AssertFalse('mismatch', GlobMatch('*cairo*', '/usr/include/pango/x.h'));
+end;
+
+procedure TLibraryMapTests.ResolveLibraryFirstMatchWinsElseDefault;
+var
+  Map: TStringList;
+begin
+  Map := TStringList.Create;
+  try
+    Map.Add('*/pango/*=pango-1.0');
+    Map.Add('*cairo*=cairo');      { first match wins — order matters }
+    Map.Add('badentry-no-eq');     { skipped, no '=' }
+    { path match }
+    AssertEquals('pango path -> pango-1.0', 'pango-1.0',
+      ResolveLibrary('/usr/include/pango/pango-layout.h', Map, 'deflib'));
+    { base-name match against a bare-filename glob }
+    Map.Insert(0, 'cairo.h=cairo-base');
+    AssertEquals('base name glob', 'cairo-base',
+      ResolveLibrary('/usr/include/cairo/cairo.h', Map, 'deflib'));
+    { no match -> default }
+    AssertEquals('unmatched -> default', 'deflib',
+      ResolveLibrary('/usr/include/glib-2.0/glib.h', Map, 'deflib'));
+    { nil map -> default }
+    AssertEquals('nil map -> default', 'deflib',
+      ResolveLibrary('/x/y.h', nil, 'deflib'));
+    { empty RHS -> empty library (bare external) }
+    Map.Clear;
+    Map.Add('*/skip/*=');
+    AssertEquals('empty RHS -> empty', '',
+      ResolveLibrary('/a/skip/z.h', Map, 'deflib'));
+  finally
+    Map.Free;
+  end;
+end;
+
+procedure TLibraryMapTests.FpcEmitterRoutesLibraryPerHeader;
+var
+  U: TBindingUnit;
+  F: TBindingFunction;
+  Map: TStringList;
+  E: TFpcEmitter;
+  S: string;
+begin
+  { Two functions from different headers; the map routes each to its
+    own library while the default covers the rest. }
+  U := TBindingUnit.Create;
+  Map := TStringList.Create;
+  try
+    F := TBindingFunction.Create('a_open', MakeLoc('/inc/liba.h', 1, 1));
+    F.ReturnType := TBindingType.Create(tkPrimitive, 'void');
+    U.Decls.Add(F);
+    F := TBindingFunction.Create('b_start', MakeLoc('/inc/libb.h', 1, 1));
+    F.ReturnType := TBindingType.Create(tkPrimitive, 'void');
+    U.Decls.Add(F);
+    F := TBindingFunction.Create('c_misc', MakeLoc('/inc/other.h', 1, 1));
+    F.ReturnType := TBindingType.Create(tkPrimitive, 'void');
+    U.Decls.Add(F);
+
+    Map.Add('*liba.h=aaa');
+    Map.Add('*libb.h=bbb');
+
+    E := TFpcEmitter.Create('u', 'deflib', False, Map);
+    try
+      S := E.Emit(U);
+    finally
+      E.Free;
+    end;
+  finally
+    Map.Free;
+    U.Free;
+  end;
+  AssertTrue('a_open -> aaa: ' + S,
+             Pos('external ''aaa'' name ''a_open''', S) > 0);
+  AssertTrue('b_start -> bbb: ' + S,
+             Pos('external ''bbb'' name ''b_start''', S) > 0);
+  AssertTrue('c_misc -> default deflib: ' + S,
+             Pos('external ''deflib'' name ''c_misc''', S) > 0);
 end;
 
 function TParserTests.SampleHeader: string;
@@ -1638,6 +1735,7 @@ var
 
 begin
   RegisterTest(TIRTests);
+  RegisterTest(TLibraryMapTests);
   RegisterTest(TParserTests);
   RegisterTest(TClangTypeTests);
   RegisterTest(TFpcEmitTests);

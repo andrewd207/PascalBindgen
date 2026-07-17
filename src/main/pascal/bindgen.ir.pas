@@ -316,6 +316,19 @@ type
 
 function MakeLoc(const FileName: string; Line, Col: Cardinal): TSourceLoc;
 
+{ Whole-string glob match supporting `*` (any run, including empty) and
+  `?` (exactly one char). Case-sensitive. Portable across FPC/Blaise —
+  no dependency on FPC's Masks unit. }
+function GlobMatch(const Pattern, S: string): Boolean;
+
+{ Pick the shared library for a declaration that came from HeaderFile.
+  Map is an ordered list of `glob=lib` entries (from --library-map);
+  the first entry whose glob matches HeaderFile — against either the
+  full path or its base name — wins. Falls back to DefaultLib when Map
+  is nil/empty or nothing matches. }
+function ResolveLibrary(const HeaderFile: string; Map: TStrings;
+                        const DefaultLib: string): string;
+
 implementation
 
 (* Owned-list implementations. Storage is Generics.Collections.TList<T>
@@ -481,6 +494,65 @@ begin
   Result.FileName := FileName;
   Result.Line := Line;
   Result.Col := Col;
+end;
+
+function GlobMatch(const Pattern, S: string): Boolean;
+var
+  P, T, Star, Mark, PN, SN: Integer;
+begin
+  { Iterative wildcard match with backtracking on the last '*'. Linear
+    in practice, no recursion — safe for long paths in both dialects. }
+  PN := Length(Pattern);
+  SN := Length(S);
+  P := 1; T := 1;
+  Star := 0; Mark := 0;
+  while T <= SN do
+  begin
+    if (P <= PN) and ((Pattern[P] = '?') or (Pattern[P] = S[T])) then
+    begin
+      Inc(P); Inc(T);
+    end
+    else if (P <= PN) and (Pattern[P] = '*') then
+    begin
+      Star := P; Mark := T; Inc(P);   { remember the '*' and where to resume }
+    end
+    else if Star <> 0 then
+    begin
+      P := Star + 1; Inc(Mark); T := Mark;   { the '*' eats one more char }
+    end
+    else
+    begin
+      Result := False; Exit;
+    end;
+  end;
+  while (P <= PN) and (Pattern[P] = '*') do Inc(P);
+  Result := P > PN;
+end;
+
+function ResolveLibrary(const HeaderFile: string; Map: TStrings;
+                        const DefaultLib: string): string;
+var
+  I, E: Integer;
+  Entry, Glob, Base: string;
+begin
+  Result := DefaultLib;
+  if (Map = nil) or (Map.Count = 0) or (HeaderFile = '') then Exit;
+  Base := ExtractFileName(HeaderFile);
+  for I := 0 to Map.Count - 1 do
+  begin
+    Entry := Map[I];
+    { Split on the first '='; globs never contain one. An empty RHS
+      ('glob=') maps matching headers to no library (bare external). }
+    E := Pos('=', Entry);
+    if E <= 0 then Continue;
+    Glob := Copy(Entry, 1, E - 1);
+    if Glob = '' then Continue;
+    if GlobMatch(Glob, HeaderFile) or GlobMatch(Glob, Base) then
+    begin
+      Result := Copy(Entry, E + 1, Length(Entry) - E);
+      Exit;
+    end;
+  end;
 end;
 
 { TBindingDecl }

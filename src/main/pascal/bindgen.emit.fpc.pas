@@ -49,6 +49,10 @@ type
   private
     FUnitName: string;
     FLibrary: string;
+    { Ordered `glob=lib` entries from --library-map; not owned. When a
+      function's source header matches an entry, that library overrides
+      FLibrary in its external clause. nil/empty = single-library mode. }
+    FLibraryMap: TStrings;
     FOutput: TStringList;
     FEmittedTypes: TStringList;
     FDeclaredTypeNames: TStringList;
@@ -97,7 +101,8 @@ type
     procedure WalkTypeForAliases(T: TBindingType);
   public
     constructor Create(const AUnitName, ALibrary: string;
-                       APrefixTypes: Boolean = False);
+                       APrefixTypes: Boolean = False;
+                       ALibraryMap: TStrings = nil);
     destructor Destroy; override;
     function Emit(U: TBindingUnit): string;
   end;
@@ -105,11 +110,12 @@ type
 implementation
 
 constructor TFpcEmitter.Create(const AUnitName, ALibrary: string;
-                               APrefixTypes: Boolean);
+                               APrefixTypes: Boolean; ALibraryMap: TStrings);
 begin
   inherited Create;
   FUnitName := AUnitName;
   FLibrary := ALibrary;
+  FLibraryMap := ALibraryMap;
   FPrefixTypes := APrefixTypes;
   FOutput := TStringList.Create;
   FEmittedTypes := TStringList.Create;
@@ -576,6 +582,7 @@ var
   Modifiers: string;
   ParamName: string;
   PascalName: string;
+  Lib: string;
 begin
   if F.RawComment <> '' then Line(PascalizeComment(F.RawComment));
   PascalName := DisambiguateIdent(F.Name);
@@ -597,9 +604,12 @@ begin
   RetType := MapTypeForSig(F.ReturnType);
   Modifiers := 'cdecl';
   if F.IsVarArgs then Modifiers := Modifiers + '; varargs';
-  if FLibrary <> '' then
+  { Per-function library: --library-map can route each extern to the
+    .so that actually exports it, keyed on its source header. }
+  Lib := ResolveLibrary(F.Location.FileName, FLibraryMap, FLibrary);
+  if Lib <> '' then
     Modifiers := Modifiers + Format('; external ''%s'' name ''%s''',
-                                    [FLibrary, F.Name])
+                                    [Lib, F.Name])
   else
     Modifiers := Modifiers + Format('; external name ''%s''', [F.Name]);
 

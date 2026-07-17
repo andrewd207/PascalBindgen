@@ -51,6 +51,10 @@ type
   private
     FUnitName: string;
     FLibrary: string;
+    { Ordered `glob=lib` entries from --library-map; not owned. Routes a
+      function's LIB clause to the library its source header maps to,
+      overriding FLibrary. nil/empty = single library. }
+    FLibraryMap: TStrings;
     FPrefixTypes: Boolean;
     FOutput: TStringList;
     FEmittedTypes: TStringList;
@@ -81,9 +85,11 @@ type
     function  TypeIdent(const S: string): string;
     function  DisambiguateIdent(const CName: string): string;
     function  RawComment(const Raw: string): string;
-    function  LibClause: string;
+    function  LibClause(const ALib: string): string;
   public
-    constructor Create(const AUnitName, ALibrary: string; APrefixTypes: Boolean = False);
+    constructor Create(const AUnitName, ALibrary: string;
+                       APrefixTypes: Boolean = False;
+                       ALibraryMap: TStrings = nil);
     destructor Destroy; override;
     function Emit(U: TBindingUnit): string;
   end;
@@ -108,11 +114,13 @@ const
     'single','double','string','pointer','ptrint','bool','boolean'
   );
 
-constructor TRqBasicEmitter.Create(const AUnitName, ALibrary: string; APrefixTypes: Boolean);
+constructor TRqBasicEmitter.Create(const AUnitName, ALibrary: string;
+                                   APrefixTypes: Boolean; ALibraryMap: TStrings);
 begin
   inherited Create;
   FUnitName := AUnitName;
   FLibrary := ALibrary;
+  FLibraryMap := ALibraryMap;
   FPrefixTypes := APrefixTypes;
   FOutput := TStringList.Create;
   FEmittedTypes := TStringList.Create;
@@ -219,17 +227,17 @@ begin
   end;
 end;
 
-function TRqBasicEmitter.LibClause: string;
+function TRqBasicEmitter.LibClause(const ALib: string): string;
 var
   L: string;
 begin
-  if FLibrary = '' then begin Result := ''; Exit; end;
+  if ALib = '' then begin Result := ''; Exit; end;
   { rapidq now turns DECLARE LIB "foo" into a linker -lfoo; the
     Unix `lib` prefix is added by the linker itself. Strip a leading
     `lib` so the user-supplied `--library libGL` doesn't become
     `-llibGL`. The Windows DECLARE LIB usage (kernel32, user32, ...)
     is unaffected since those names have no `lib` prefix. }
-  L := FLibrary;
+  L := ALib;
   if (Length(L) > 3) and (LowerCase(Copy(L, 1, 3)) = 'lib') then
     L := Copy(L, 4, MaxInt);
   Result := Format('LIB "%s" ', [L]);
@@ -487,7 +495,7 @@ var
   I: Integer;
   Params: string;
   P: TBindingParam;
-  RetType, ParamName, PascalName, Kind, Sig: string;
+  RetType, ParamName, PascalName, Kind, Sig, Lib: string;
 begin
   if F.RawComment <> '' then Line(RawComment(F.RawComment));
   PascalName := DisambiguateIdent(F.Name);
@@ -515,8 +523,10 @@ begin
   { Pad SUB to FUNCTION's width so the routine name column aligns
     across both kinds — a stretch of mixed DECLAREs stays scannable. }
   if RetType = '' then Kind := 'SUB     ' else Kind := 'FUNCTION';
+  { --library-map may route this DECLARE to the library its header maps to. }
+  Lib := ResolveLibrary(F.Location.FileName, FLibraryMap, FLibrary);
   Sig := Format('DECLARE %s %s %sALIAS "%s" %s',
-                [Kind, PascalName, LibClause, F.Name, Params]);
+                [Kind, PascalName, LibClause(Lib), F.Name, Params]);
   if RetType <> '' then Sig := Sig + ' AS ' + RetType;
   if F.IsVarArgs then
     Sig := Sig + '  '' varargs — call via wrapper';

@@ -47,6 +47,11 @@ type
   private
     FUnitName: string;
     FLibrary: string;
+    { Ordered `glob=lib` entries from --library-map; not owned. A
+      function whose source header matches an entry uses that library
+      in its external clause instead of FLibrary. nil/empty = single
+      library. }
+    FLibraryMap: TStrings;
     FOutput: TStringList;
     FEmittedTypes: TStringList;
     FDeclaredTypeNames: TStringList;
@@ -96,7 +101,8 @@ type
     procedure WalkTypeForAliases(T: TBindingType);
   public
     constructor Create(const AUnitName, ALibrary: string;
-                       APrefixTypes: Boolean = False);
+                       APrefixTypes: Boolean = False;
+                       ALibraryMap: TStrings = nil);
     destructor Destroy; override;
     function Emit(U: TBindingUnit): string;
   end;
@@ -123,11 +129,12 @@ const
   );
 
 constructor TBlaiseEmitter.Create(const AUnitName, ALibrary: string;
-                                  APrefixTypes: Boolean);
+                                  APrefixTypes: Boolean; ALibraryMap: TStrings);
 begin
   inherited Create;
   FUnitName := AUnitName;
   FLibrary := ALibrary;
+  FLibraryMap := ALibraryMap;
   FPrefixTypes := APrefixTypes;
   FOutput := TStringList.Create;
   FEmittedTypes := TStringList.Create;
@@ -631,7 +638,7 @@ var
   I: Integer;
   Params: string;
   P: TBindingParam;
-  RetType, Sig, ParamName, Modifiers, PascalName: string;
+  RetType, Sig, ParamName, Modifiers, PascalName, Lib: string;
 begin
   if F.RawComment <> '' then Line(PascalizeComment(F.RawComment));
   PascalName := DisambiguateIdent(F.Name);
@@ -654,9 +661,11 @@ begin
   { Blaise now parses `external '<lib>' name '<sym>'` and resolves the
     library at link time (bare 'm' -> libm, or a full soname like
     'libm.so.6'), matching the FPC emitter. Fall back to a bare
-    `external name '<sym>'` when no --library was given. }
-  if FLibrary <> '' then
-    Modifiers := Format('external ''%s'' name ''%s''', [FLibrary, F.Name])
+    `external name '<sym>'` when no --library was given.
+    --library-map can override the library per function by its header. }
+  Lib := ResolveLibrary(F.Location.FileName, FLibraryMap, FLibrary);
+  if Lib <> '' then
+    Modifiers := Format('external ''%s'' name ''%s''', [Lib, F.Name])
   else
     Modifiers := Format('external name ''%s''', [F.Name]);
   if F.IsVarArgs then

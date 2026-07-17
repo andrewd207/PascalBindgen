@@ -59,6 +59,32 @@ the parser sees before committing to an emitter.
   time; bare `m` → `libm`, or pass a full soname like `libm.so.6`).
   Without `--library` the clause falls back to `external name '...'`.
 
+`--library-map <GLOB>=<libname>`:: (repeatable)
+  Route a function's `external`/`LIB` clause to the library whose glob
+  matches the header the function came from, overriding `--library`.
+  Each declaration records its source header (the `{ file.h:NN }`
+  trailing comment); the glob is matched against both that full path
+  and its base name, with `*` (any run) and `?` (one char) wildcards.
+  Entries are tried in order — first match wins — and anything that
+  matches nothing falls back to `--library`. An empty right-hand side
+  (`GLOB=`) maps matching headers to no library (a bare `external`).
++
+Solves the umbrella-header problem: one generated unit from a header
+that spans several `.so` files (e.g. `pangocairo.h` → pangocairo,
+pango, gobject, glib, cairo) can tag each `external` with the library
+that actually exports it, so the unit links with no extra flags:
++
+[source,shell]
+----
+pascal_bindgen --fpc --header /usr/include/pango/pangocairo.h \
+    --library pangocairo-1.0 \
+    --library-map '*/pango/*=pango-1.0' \
+    --library-map '*/glib-2.0/glib/*=glib-2.0' \
+    --library-map '*/glib-2.0/gobject/*=gobject-2.0' \
+    --library-map '*/cairo/*=cairo' \
+    -- $(pkg-config --cflags pangocairo)
+----
+
 `--prefix-types`::
   Prefixes every emitted type name with `T` (e.g. `GtkWindow` →
   `TGtkWindow`) so the type namespace can't case-fold-collide with

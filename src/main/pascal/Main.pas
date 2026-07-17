@@ -44,10 +44,16 @@ begin
   WriteLn('pascal_bindgen ', Version);
   WriteLn('usage: pascal_bindgen [--fpc|--blaise|--rqbasic] --header <file.h> [--output <file.pas>]');
   WriteLn('                      [--unit-name <name>] [--library <name>] [--prefix-types]');
+  WriteLn('                      [--library-map GLOB=libname]...');
   WriteLn('                      [--target SYMBOL:TRIPLE]...');
   WriteLn('                      [--target-args SYMBOL=ARGS]...');
   WriteLn('                      [-- <clang args...>]');
   WriteLn('  With no dialect flag the parser dumps top-level decls for debugging.');
+  WriteLn('  --library-map routes each function''s external clause to the library whose');
+  WriteLn('  glob matches the header it came from (matched against full path or base');
+  WriteLn('  name, `*`/`?` wildcards, first match wins), overriding --library. Repeatable;');
+  WriteLn('  useful for umbrella headers spanning several .so files (e.g. pangocairo.h ->');
+  WriteLn('  pango/gobject/glib/cairo). Example: --library-map ''*/pango/*=pango-1.0''.');
   WriteLn('  --target may be repeated; each pass parses with -target TRIPLE and the');
   WriteLn('  per-symbol --target-args. Decls divergent across passes are gated with');
   WriteLn('  {$IFDEF SYMBOL} ... in the emitted output. Without --target, output is');
@@ -152,7 +158,8 @@ begin
 end;
 
 function EmitBindings(Dialect, UnitName, LibraryName: string;
-                      PrefixTypes: Boolean; U: TBindingUnit): string;
+                      PrefixTypes: Boolean; U: TBindingUnit;
+                      LibraryMap: TStrings): string;
 var
   FpcEmitter:    TFpcEmitter;
   BlaiseEmitter: TBlaiseEmitter;
@@ -160,17 +167,17 @@ var
 begin
   if Dialect = 'fpc' then
   begin
-    FpcEmitter := TFpcEmitter.Create(UnitName, LibraryName, PrefixTypes);
+    FpcEmitter := TFpcEmitter.Create(UnitName, LibraryName, PrefixTypes, LibraryMap);
     try Result := FpcEmitter.Emit(U); finally FpcEmitter.Free; end;
   end
   else if Dialect = 'blaise' then
   begin
-    BlaiseEmitter := TBlaiseEmitter.Create(UnitName, LibraryName, PrefixTypes);
+    BlaiseEmitter := TBlaiseEmitter.Create(UnitName, LibraryName, PrefixTypes, LibraryMap);
     try Result := BlaiseEmitter.Emit(U); finally BlaiseEmitter.Free; end;
   end
   else { rqbasic }
   begin
-    RqEmitter := TRqBasicEmitter.Create(UnitName, LibraryName, PrefixTypes);
+    RqEmitter := TRqBasicEmitter.Create(UnitName, LibraryName, PrefixTypes, LibraryMap);
     try Result := RqEmitter.Emit(U); finally RqEmitter.Free; end;
   end;
 end;
@@ -180,6 +187,7 @@ var
   OutputPath:  string;
   UnitName:    string;
   LibraryName: string;
+  LibraryMap:  TStringList;  { ordered `glob=lib` entries from --library-map }
   Dialect:     string;
   PrefixTypes: Boolean;
   ExtraArgs:   array of string;
@@ -201,6 +209,7 @@ begin
   OutputPath := '';
   UnitName := '';
   LibraryName := '';
+  LibraryMap := TStringList.Create;
   Dialect := '';
   PrefixTypes := False;
   PastDD := False;
@@ -219,6 +228,16 @@ begin
     else if Arg = '--output'    then begin Inc(I); if I > ParamCount then Usage; OutputPath  := ParamStr(I); end
     else if Arg = '--unit-name' then begin Inc(I); if I > ParamCount then Usage; UnitName    := ParamStr(I); end
     else if Arg = '--library'   then begin Inc(I); if I > ParamCount then Usage; LibraryName := ParamStr(I); end
+    else if Arg = '--library-map' then
+    begin
+      Inc(I); if I > ParamCount then Usage;
+      if Pos('=', ParamStr(I)) <= 0 then
+      begin
+        WriteLn(StdErr, 'error: --library-map expects GLOB=libname, got: ', ParamStr(I));
+        Halt(2);
+      end;
+      LibraryMap.Add(ParamStr(I));
+    end
     else if Arg = '--fpc'     then Dialect := 'fpc'
     else if Arg = '--blaise'  then Dialect := 'blaise'
     else if Arg = '--rqbasic' then Dialect := 'rqbasic'
@@ -304,7 +323,7 @@ begin
       begin
         if UnitName = '' then UnitName := DeriveUnitName(OutputPath, HeaderPath);
         if OutputPath = '' then OutputPath := '-';
-        WriteAllText(OutputPath, EmitBindings(Dialect, UnitName, LibraryName, PrefixTypes, U));
+        WriteAllText(OutputPath, EmitBindings(Dialect, UnitName, LibraryName, PrefixTypes, U, LibraryMap));
       end;
     finally
       U.Free;
@@ -347,10 +366,11 @@ begin
     begin
       if UnitName = '' then UnitName := DeriveUnitName(OutputPath, HeaderPath);
       if OutputPath = '' then OutputPath := '-';
-      WriteAllText(OutputPath, EmitBindings(Dialect, UnitName, LibraryName, PrefixTypes, Merged));
+      WriteAllText(OutputPath, EmitBindings(Dialect, UnitName, LibraryName, PrefixTypes, Merged, LibraryMap));
     end;
   finally
     Merged.Free;
     for Ti := 0 to High(Targets) do begin TgtTmp := Targets[Ti]; TgtTmp.Args.Free; end;
+    LibraryMap.Free;
   end;
 end.
