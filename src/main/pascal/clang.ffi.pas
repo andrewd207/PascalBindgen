@@ -194,6 +194,10 @@ function clang_Cursor_getTranslationUnit(c: CXCursor): CXTranslationUnit;
   cdecl; external name 'clang_Cursor_getTranslationUnit';
 function clang_Cursor_isMacroFunctionLike(c: CXCursor): cuint;
   cdecl; external name 'clang_Cursor_isMacroFunctionLike';
+{ Non-zero when c is itself the definition (a struct/union/enum body),
+  as opposed to a forward declaration. }
+function clang_isCursorDefinition(c: CXCursor): cuint;
+  cdecl; external name 'clang_isCursorDefinition';
 
 procedure clang_getFileLocation(loc: CXSourceLocation;
     out_file: PCXFile; out_line, out_column, out_offset: PCardinal);

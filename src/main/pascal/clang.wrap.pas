@@ -65,6 +65,8 @@ type
     function Spelling: string;
     function InMainFile: Boolean;
     function InSystemHeader: Boolean;
+    { True when this cursor is the record/enum body, not a forward decl. }
+    function IsDefinition: Boolean;
     function RawComment: string;
     function MacroBody: string;  { joined by LF; '' for func-like / empty }
     function TypeOf: TClangType;
@@ -309,6 +311,11 @@ end;
 function TClangCursor.InSystemHeader: Boolean;
 begin
   Result := clang_Location_isInSystemHeader(clang_getCursorLocation(FHandle)) <> 0;
+end;
+
+function TClangCursor.IsDefinition: Boolean;
+begin
+  Result := clang_isCursorDefinition(FHandle) <> 0;
 end;
 
 function TClangCursor.TypeOf: TClangType;

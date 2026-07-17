@@ -94,6 +94,7 @@ type
     procedure TypedefMyIntAliasesInt;
     procedure UserIncludeDeclsAreEmittedSystemHeadersAreNot;
     procedure ForwardDeclThenDefinitionEmitsOnce;
+    procedure ForwardTypedefStructRetainsFields;
     procedure ReservedWordIdentsAreEscapedAndEmittedSourceCompiles;
     procedure PointerParamAndReturnAreNamedAliasesAndCompile;
     procedure FilteredOutTypedefChasesCanonicalPrimitive;
@@ -141,8 +142,14 @@ type
 
   TClangTypeTests = class(TTestCase)
   private
+    { Translation units whose AST backs a cursor returned by FindCursor.
+      A CXCursor is only valid while its TU is alive, so these are kept
+      here and disposed in TearDown, not inside FindCursor. }
+    FLiveTUs: TList;
     function FindCursor(Idx: TClangIndex; const Header, Spelling: string;
                         Kind: Integer): TClangCursor;
+  protected
+    procedure TearDown; override;
   published
     procedure FunctionReturnTypeIsInt;
     procedure FunctionParamCountMatches;
@@ -507,6 +514,46 @@ begin
     Inc(P);
   end;
   AssertEquals('exactly one OpaqueThing record declaration', 1, Count);
+  { The surviving declaration must be the completed one, with fields —
+    not the field-less forward (the PangoRectangle bug). }
+  AssertTrue('OpaqueThing keeps its payload field: ' + EmittedSrc,
+             Pos('payload: cint', EmittedSrc) > 0);
+end;
+
+procedure TParserTests.ForwardTypedefStructRetainsFields;
+{ A public struct declared as `typedef struct X Y;` forward then defined
+  later (`struct X { ... };`) must be parsed with its fields, not as an
+  opaque empty record. This is the PangoRectangle pattern. }
+const
+  Hdr =
+    'typedef struct _Rect Rect;'                          + LineEnding +
+    'struct _Rect { int x; int y; int width; int height; };' + LineEnding +
+    'void take(Rect *r);'                                 + LineEnding;
+var
+  TmpDir, HdrFile: string;
+  U: TBindingUnit;
+  D: TBindingDecl;
+  R: TBindingRecord;
+begin
+  TmpDir := GetTempDir;
+  HdrFile := IncludeTrailingPathDelimiter(TmpDir) + 'fwdrect.h';
+  WriteSnippet(HdrFile, Hdr);
+  try
+    U := ParseHeader(HdrFile);
+    try
+      D := FindByName(U, '_Rect');
+      AssertNotNull('_Rect record parsed', D);
+      AssertTrue('_Rect is a record', D is TBindingRecord);
+      R := TBindingRecord(D);
+      AssertEquals('all four fields retained (not opaque)', 4, R.Fields.Count);
+      AssertEquals('first field is x', 'x', R.Fields.Items[0].Name);
+      AssertEquals('last field is height', 'height', R.Fields.Items[3].Name);
+    finally
+      U.Free;
+    end;
+  finally
+    DeleteFile(HdrFile);
+  end;
 end;
 
 procedure TParserTests.ReservedWordIdentsAreEscapedAndEmittedSourceCompiles;
@@ -1408,36 +1455,50 @@ var
   I: Integer;
 begin
   Result := nil;
+  if FLiveTUs = nil then FLiveTUs := TList.Create;
   TU := Idx.ParseNoArgs(Header);
+  { Keep the TU alive: the returned cursor's CXCursor points into this
+    TU's AST, so disposing it here would leave the caller holding a
+    dangling handle. TearDown frees these. }
+  FLiveTUs.Add(TU);
+  Root := TU.RootCursor;
   try
-    Root := TU.RootCursor;
+    Kids := CursorChildren(Root);
     try
-      Kids := CursorChildren(Root);
-      try
-        for I := 0 to High(Kids) do
-          if (Kids[I].Kind = Kind) and (Kids[I].Spelling = Spelling) then
-          begin
-            { transfer ownership out of the kids array }
-            Result := Kids[I];
-            Kids[I] := nil;
-            Break;
-          end;
-      finally
-        for I := 0 to High(Kids) do
+      for I := 0 to High(Kids) do
+        if (Kids[I].Kind = Kind) and (Kids[I].Spelling = Spelling) then
         begin
-          { Stage through K — Blaise rejects arr[I].Method calls. }
-          K := Kids[I];
-          if K <> nil then K.Free;
+          { transfer ownership out of the kids array }
+          Result := Kids[I];
+          Kids[I] := nil;
+          Break;
         end;
-      end;
     finally
-      Root.Free;
+      for I := 0 to High(Kids) do
+      begin
+        { Stage through K — Blaise rejects arr[I].Method calls. }
+        K := Kids[I];
+        if K <> nil then K.Free;
+      end;
     end;
   finally
-    TU.Free;
+    Root.Free;
   end;
   if Result = nil then
     Fail('cursor not found: ' + Spelling);
+end;
+
+procedure TClangTypeTests.TearDown;
+var
+  I: Integer;
+begin
+  if FLiveTUs <> nil then
+  begin
+    for I := 0 to FLiveTUs.Count - 1 do
+      TClangTranslationUnit(FLiveTUs[I]).Free;
+    FreeAndNil(FLiveTUs);
+  end;
+  inherited TearDown;
 end;
 
 procedure TClangTypeTests.FunctionReturnTypeIsInt;

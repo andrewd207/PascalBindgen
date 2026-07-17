@@ -507,14 +507,29 @@ var
   K: Integer;
   Decl: TBindingDecl;
   I: Integer;
+  DefinedTags: TStringList;
 begin
   Result := TBindingUnit.Create;
   Result.AddHeader(HeaderPath);
+  DefinedTags := TStringList.Create;
+  DefinedTags.Sorted := True;
+  DefinedTags.Duplicates := dupIgnore;
   try
     Root := TU.RootCursor;
     try
       Children := CursorChildren(Root);
       try
+        { Pre-pass: record the tag of every struct/union that has a
+          body, so the main loop can drop redundant forward decls of the
+          same tag while keeping genuinely-opaque forwards. }
+        for I := 0 to High(Children) do
+        begin
+          Child := Children[I];
+          if ((Child.Kind = TClangKinds.StructDecl)
+              or (Child.Kind = TClangKinds.UnionDecl))
+             and Child.IsDefinition and (Child.Spelling <> '') then
+            DefinedTags.Add(Child.Spelling);
+        end;
         for I := 0 to High(Children) do
         begin
           Child := Children[I];
@@ -533,10 +548,21 @@ begin
           end
           else if K = TClangKinds.TypedefDecl then
             Decl := BuildTypedef(Child)
-          else if K = TClangKinds.StructDecl then
-            Decl := BuildRecord(Child, False)
-          else if K = TClangKinds.UnionDecl then
-            Decl := BuildRecord(Child, True)
+          else if (K = TClangKinds.StructDecl) or (K = TClangKinds.UnionDecl) then
+          begin
+            { A struct/union is surfaced once per declaration site, so a
+              forward `typedef struct X Y;` plus a later full definition
+              of `struct X` yields two cursors with the same name.
+              Emitting the forward first would win the name and leave the
+              record field-less (the PangoRectangle bug). Skip a
+              non-defining cursor when the body exists elsewhere in the
+              TU (DefinedTags, gathered below); keep it only when the type
+              is genuinely opaque (no definition anywhere). }
+            if (not Child.IsDefinition)
+               and (Child.Spelling <> '')
+               and (DefinedTags.IndexOf(Child.Spelling) >= 0) then Continue;
+            Decl := BuildRecord(Child, K = TClangKinds.UnionDecl);
+          end
           else if K = TClangKinds.EnumDecl then
             Decl := BuildEnum(Child)
           else if K = TClangKinds.MacroDef then
@@ -555,6 +581,7 @@ begin
     end;
   finally
     TU.Free;
+    DefinedTags.Free;
   end;
 end;
 
